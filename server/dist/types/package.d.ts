@@ -1,0 +1,46 @@
+import { Document } from 'mongoose';
+export interface IPackageInput {
+    trackingNumber: string;
+    carrier: 'USPS' | 'FedEx';
+    customer: string;
+    packageType: 'LOR' | 'demand' | 'spol' | 'AL' | 'other';
+    dateSent: Date;
+    notes?: string;
+}
+export interface IPackageResponse {
+    id: string;
+    trackingNumber: string;
+    carrier: 'USPS' | 'FedEx';
+    customer: string;
+    packageType: 'LOR' | 'demand' | 'spol' | 'AL' | 'other';
+    status: string;
+    dateSent: Date;
+    deliveryDate?: Date;
+    notes?: string;
+    trackingHistory?: TrackingEvent[];
+    lastUpdated: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+export interface TrackingEvent {
+    date: Date;
+    status: string;
+    location?: string;
+    description?: string;
+}
+export interface IPackage extends Document {
+    trackingNumber: string;
+    carrier: 'USPS' | 'FedEx';
+    customer: string;
+    packageType: 'LOR' | 'demand' | 'spol' | 'AL' | 'other';
+    status: string;
+    dateSent: Date;
+    deliveryDate?: Date;
+    notes?: string;
+    trackingHistory: TrackingEvent[];
+    lastUpdated: Date;
+    userId: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+//# sourceMappingURL=package.d.ts.map
