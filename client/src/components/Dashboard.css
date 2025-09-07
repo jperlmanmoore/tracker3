@@ -56,6 +56,20 @@
   line-height: 1;
 }
 
+/* Customer header styling */
+.client-header-row .btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Red X delete button in customer header */
+.client-header-row .btn-danger {
+  font-size: 0.875rem;
+  padding: 0.125rem 0.375rem;
+  line-height: 1;
+  font-weight: bold;
+}
+
 .min-vh-100 {
   min-height: 100vh;
 }

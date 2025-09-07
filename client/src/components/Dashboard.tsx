@@ -312,8 +312,19 @@ const Dashboard: React.FC = () => {
           <tr className="client-header-row">
             <td colSpan={6} className="client-row bg-light">
               <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <strong>📁 {group._id}</strong> ({group.packages?.length || 0} packages)
+                <div className="d-flex align-items-center gap-3">
+                  <span>
+                    <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
+                  </span>
+                  <Button 
+                    variant="danger" 
+                    size="sm"
+                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
+                    title="Delete customer and all packages"
+                    className="p-1"
+                  >
+                    ✕
+                  </Button>
                 </div>
               </div>
             </td>
@@ -465,19 +476,6 @@ const Dashboard: React.FC = () => {
                       title="View Proof of Delivery for all delivered packages"
                     >
                       📋 View All POD
-                    </Button>
-                  )}
-                  
-                  {/* Delete Customer button - only show for first package */}
-                  {index === 0 && (
-                    <Button 
-                      variant="outline-danger" 
-                      size="sm"
-                      onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
-                      className="ms-1"
-                      title="Delete customer and all packages"
-                    >
-                      🗑️ Delete Customer
                     </Button>
                   )}
                 </div>
