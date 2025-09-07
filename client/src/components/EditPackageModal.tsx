@@ -160,6 +160,8 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({
               onChange={(e) => setFormData({ ...formData, packageType: e.target.value as any })}
               required
               disabled={loading}
+              title="Select package type"
+              aria-label="Select package type"
             >
               <option value="LOR">LOR</option>
               <option value="demand">Demand</option>
