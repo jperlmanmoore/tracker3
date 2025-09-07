@@ -154,14 +154,15 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({
           </Form.Group>
 
           <Form.Group className="mb-3">
-            <Form.Label>Package Type *</Form.Label>
+            <Form.Label htmlFor="edit-package-type">Package Type *</Form.Label>
             <Form.Select
+              id="edit-package-type"
               value={formData.packageType}
               onChange={(e) => setFormData({ ...formData, packageType: e.target.value as any })}
               required
               disabled={loading}
               title="Select package type"
-              aria-label="Select package type"
+              aria-label="Package Type"
             >
               <option value="LOR">LOR</option>
               <option value="demand">Demand</option>

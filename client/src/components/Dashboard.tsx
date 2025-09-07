@@ -204,30 +204,6 @@ const Dashboard: React.FC = () => {
     setShowBulkProofModal(true);
   };
 
-  const openCarrierProofOfDelivery = (customer: string, carrier: string, packages: any[]): void => {
-    const deliveredPackages = packages.filter(pkg => 
-      pkg.carrier.toLowerCase() === carrier.toLowerCase() && 
-      pkg.status && 
-      pkg.status.toLowerCase() === 'delivered'
-    );
-    
-    if (deliveredPackages.length === 0) {
-      setError(`No delivered ${carrier} packages found for this customer`);
-      return;
-    }
-    
-    setSelectedCustomer({
-      name: `${customer} - ${carrier} Packages`,
-      packages: deliveredPackages.map(pkg => ({
-        trackingNumber: pkg.trackingNumber,
-        carrier: pkg.carrier,
-        status: pkg.status,
-        deliveryDate: pkg.deliveryDate
-      }))
-    });
-    setShowBulkProofModal(true);
-  };
-
   const simulateDelivery = async (packageData: any): Promise<void> => {
     try {
       const token = localStorage.getItem('token');
@@ -294,197 +270,109 @@ const Dashboard: React.FC = () => {
       return <tr><td colSpan={7}>No packages found</td></tr>;
     }
 
-    return packages.map((group: any) => {
-      // Group packages by carrier within each client
-      const packagesByCarrier = (group.packages || []).reduce((acc: any, pkg: any) => {
-        const carrier = pkg.carrier || 'Unknown';
-        if (!acc[carrier]) {
-          acc[carrier] = [];
-        }
-        acc[carrier].push(pkg);
-        return acc;
-      }, {});
-
-      const carriers = Object.keys(packagesByCarrier);
-
-      return (
-        <React.Fragment key={group._id}>
-          <tr className="client-header-row">
-            <td colSpan={6} className="client-row bg-light">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="d-flex align-items-center gap-3">
-                  <span>
-                    <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
-                  </span>
-                  <Button 
-                    variant="danger" 
-                    size="sm"
-                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
-                    title="Delete customer and all packages"
-                    className="p-1"
-                  >
-                    ✕
-                  </Button>
-                </div>
+    return packages.map((group: any) => (
+      <React.Fragment key={group._id}>
+        <tr className="client-header-row">
+          <td colSpan={7} className="client-row bg-light">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <strong>📁 {group._id}</strong> ({group.packages?.length || 0} packages)
               </div>
-            </td>
-            <td></td>
-          </tr>
-          {group.packages?.map((pkg: any, index: number) => (
-            <tr key={index}>
-              <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
-              <td>{group._id}</td>
-              <td>
-                <div className="d-flex align-items-center gap-2">
-                  <a 
-                    href="#" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      openTrackingUrl(pkg.trackingNumber, pkg.carrier);
-                    }}
-                    className="text-primary"
-                  >
-                    {pkg.trackingNumber}
-                  </a>
+              <div className="customer-actions">
+                {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
                   <Button 
-                    variant="outline-secondary" 
+                    variant="outline-success" 
                     size="sm"
-                    onClick={() => openEditPackage({
+                    onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
+                    title="View Proof of Delivery for all delivered packages"
+                  >
+                    📋 View All POD
+                  </Button>
+                )}
+                <Button 
+                  variant="outline-danger" 
+                  size="sm"
+                  onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
+                  title="Delete customer and all packages"
+                >
+                  🗑️ Delete Customer
+                </Button>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {group.packages?.map((pkg: any, index: number) => (
+          <tr key={index}>
+            <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
+            <td>{group._id}</td>
+            <td>
+              <div className="d-flex align-items-center gap-2">
+                <a 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    openTrackingUrl(pkg.trackingNumber, pkg.carrier);
+                  }}
+                  className="text-primary"
+                >
+                  {pkg.trackingNumber}
+                </a>
+                <Button 
+                  variant="outline-secondary" 
+                  size="sm"
+                  onClick={() => openEditPackage({
+                    ...pkg,
+                    customer: group._id
+                  })}
+                  title="Edit Package"
+                >
+                  ✏️ Edit
+                </Button>
+                {pkg.status && pkg.status.toLowerCase() === 'delivered' && (
+                  <Button 
+                    variant="outline-success" 
+                    size="sm"
+                    onClick={() => openProofOfDelivery({
                       ...pkg,
                       customer: group._id
                     })}
-                    title="Edit Package"
-                    className="p-1"
+                    title="View Proof of Delivery"
                   >
-                    ✏️
+                    📋 POD
                   </Button>
-                </div>
-              </td>
-              <td>
-                <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
-                  {pkg.carrier}
-                </Badge>
-              </td>
-              <td>
-                <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
-                  {pkg.status || 'Unknown'}
-                </Badge>
-              </td>
-              <td>{pkg.notes || '-'}</td>
-              <td>
-                {index === 0 && (
-                  <div className="d-flex flex-column gap-1">
-                    {carriers.map(carrier => {
-                      const carrierPackages = packagesByCarrier[carrier];
-                      if (carrierPackages.length === 1) {
-                        return (
-                          <Button 
-                            key={carrier}
-                            variant="outline-primary" 
-                            size="sm"
-                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
-                          >
-                            Track {carrier}
-                          </Button>
-                        );
-                      } else {
-                        // Multiple packages for this carrier - create bulk tracking URL
-                        const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
-                        const bulkUrl = carrier.toLowerCase() === 'usps' 
-                          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
-                          : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
-                        
-                        return (
-                          <Button 
-                            key={carrier}
-                            variant="outline-primary" 
-                            size="sm"
-                            onClick={() => window.open(bulkUrl, '_blank')}
-                          >
-                            Track All {carrier} ({carrierPackages.length})
-                          </Button>
-                        );
-                      }
-                    })}
-                  </div>
                 )}
-                {/* Individual package actions */}
-                <div className="package-actions">
-                  {pkg.status && pkg.status.toLowerCase() === 'delivered' && (
-                    <Button 
-                      variant="outline-success" 
-                      size="sm"
-                      onClick={() => openProofOfDelivery({
-                        ...pkg,
-                        customer: group._id
-                      })}
-                      title="View Proof of Delivery"
-                    >
-                      📋 POD
-                    </Button>
-                  )}
-                  {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
-                    <Button 
-                      variant="outline-warning" 
-                      size="sm"
-                      onClick={() => simulateDelivery({
-                        ...pkg,
-                        customer: group._id
-                      })}
-                      title="Simulate Delivery (for testing)"
-                    >
-                      🚚 Simulate
-                    </Button>
-                  )}
-                  
-                  {/* Carrier-specific POD buttons - only show for first package */}
-                  {index === 0 && carriers.map(carrier => {
-                    const carrierPackages = packagesByCarrier[carrier];
-                    const deliveredPackages = carrierPackages.filter((pkg: any) => 
-                      pkg.status && pkg.status.toLowerCase() === 'delivered'
-                    );
-                    
-                    if (deliveredPackages.length === 0) return null;
-                    
-                    if (deliveredPackages.length === 1) {
-                      // Single delivered package - individual POD button (skip if already shown above)
-                      return null;
-                    } else {
-                      // Multiple delivered packages - bulk POD button
-                      return (
-                        <Button 
-                          key={`pod-${carrier}`}
-                          variant="outline-success" 
-                          size="sm"
-                          onClick={() => openCarrierProofOfDelivery(group._id, carrier, carrierPackages)}
-                          className="ms-1"
-                          title={`View Proof of Delivery for all ${carrier} packages`}
-                        >
-                          📋 All {carrier} POD ({deliveredPackages.length})
-                        </Button>
-                      );
-                    }
+              </div>
+            </td>
+            <td>
+              <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
+                {pkg.carrier}
+              </Badge>
+            </td>
+            <td>
+              <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
+                {pkg.status || 'Unknown'}
+              </Badge>
+            </td>
+            <td>{pkg.notes || '-'}</td>
+            <td>
+              {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
+                <Button 
+                  variant="outline-warning" 
+                  size="sm"
+                  onClick={() => simulateDelivery({
+                    ...pkg,
+                    customer: group._id
                   })}
-                  
-                  {/* View All POD button - only show for first package and if there are delivered packages */}
-                  {index === 0 && group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
-                    <Button 
-                      variant="outline-success" 
-                      size="sm"
-                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
-                      className="ms-1"
-                      title="View Proof of Delivery for all delivered packages"
-                    >
-                      📋 View All POD
-                    </Button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </React.Fragment>
-      );
-    });
+                  title="Simulate Delivery (for testing)"
+                >
+                  🚚 Simulate
+                </Button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </React.Fragment>
+    ));
   };
 
   if (loading) {
@@ -521,52 +409,6 @@ const Dashboard: React.FC = () => {
           </div>
 
           {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
-
-          {/* Filters */}
-          <Card className="mb-4">
-            <Card.Body>
-              <Row>
-                <Col md={4}>
-                  <Form.Group>
-                    <Form.Label>Filter by Client</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter client name..."
-                      value={filterClient}
-                      onChange={(e) => setFilterClient(e.target.value)}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={4}>
-                  <Form.Group>
-                    <Form.Label>Filter by Carrier</Form.Label>
-                    <label htmlFor="filter-select">Filter Options</label>
-                    <Form.Select
-                      id="filter-select"
-                      value={filterCarrier}
-                      onChange={(e) => setFilterCarrier(e.target.value)}
-                      aria-label="Filter by carrier"
-                    >
-                      <option value="">All Carriers</option>
-                      <option value="usps">USPS</option>
-                      <option value="fedex">FedEx</option>
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-                <Col md={4} className="d-flex align-items-end">
-                  <Button 
-                    variant="outline-secondary" 
-                    onClick={() => {
-                      setFilterClient('');
-                      setFilterCarrier('');
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                </Col>
-              </Row>
-            </Card.Body>
-          </Card>
 
           {/* Statistics */}
           <Row className="mb-4">
@@ -632,33 +474,21 @@ const Dashboard: React.FC = () => {
                   <Table hover>
                     <thead>
                       <tr>
-                        <th 
-                          className="sortable-header"
-                          onClick={() => handleSort('date')}
-                        >
+                        <th className="sortable-header" onClick={() => handleSort('date')}>
                           Date Added {sortBy === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th 
-                          className="sortable-header"
-                          onClick={() => handleSort('client')}
-                        >
+                        <th className="sortable-header" onClick={() => handleSort('client')}>
                           Client {sortBy === 'client' && (sortOrder === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th>Tracking Number</th>
-                        <th 
-                          className="sortable-header"
-                          onClick={() => handleSort('carrier')}
-                        >
+                        <th>Tracking Number & Actions</th>
+                        <th className="sortable-header" onClick={() => handleSort('carrier')}>
                           Carrier {sortBy === 'carrier' && (sortOrder === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th 
-                          className="sortable-header"
-                          onClick={() => handleSort('status')}
-                        >
+                        <th className="sortable-header" onClick={() => handleSort('status')}>
                           Status {sortBy === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
                         </th>
                         <th>Description</th>
-                        <th>Actions</th>
+                        <th>Simulate</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -669,45 +499,46 @@ const Dashboard: React.FC = () => {
               )}
             </Card.Body>
           </Card>
+
+          {/* Modals */}
+          <AddPackageModal
+            show={showAddModal}
+            onHide={() => setShowAddModal(false)}
+            onPackageAdded={fetchGroupedPackages}
+          />
+
+          <ProofOfDeliveryModal
+            show={showProofModal}
+            onHide={() => setShowProofModal(false)}
+            packageId={selectedPackage.id}
+            trackingNumber={selectedPackage.trackingNumber}
+            customer={selectedPackage.customer}
+            carrier={selectedPackage.carrier}
+          />
+
+          <BulkProofOfDeliveryModal
+            show={showBulkProofModal}
+            onHide={() => setShowBulkProofModal(false)}
+            customer={selectedCustomer.name}
+            packages={selectedCustomer.packages}
+          />
+
+          <EditPackageModal
+            show={showEditModal}
+            onHide={() => setShowEditModal(false)}
+            package={selectedPackageForEdit}
+            onPackageUpdated={fetchGroupedPackages}
+          />
+
+          <DeleteCustomerModal
+            show={showDeleteCustomerModal}
+            onHide={() => setShowDeleteCustomerModal(false)}
+            customerName={selectedCustomerForDelete.name}
+            packageCount={selectedCustomerForDelete.packageCount}
+            onCustomerDeleted={fetchGroupedPackages}
+          />
         </Col>
       </Row>
-
-      <AddPackageModal
-        show={showAddModal}
-        onHide={() => setShowAddModal(false)}
-        onPackageAdded={fetchGroupedPackages}
-      />
-
-      <ProofOfDeliveryModal
-        show={showProofModal}
-        onHide={() => setShowProofModal(false)}
-        packageId={selectedPackage.id}
-        trackingNumber={selectedPackage.trackingNumber}
-        customer={selectedPackage.customer}
-        carrier={selectedPackage.carrier}
-      />
-
-      <BulkProofOfDeliveryModal
-        show={showBulkProofModal}
-        onHide={() => setShowBulkProofModal(false)}
-        customer={selectedCustomer.name}
-        packages={selectedCustomer.packages}
-      />
-
-      <EditPackageModal
-        show={showEditModal}
-        onHide={() => setShowEditModal(false)}
-        package={selectedPackageForEdit}
-        onPackageUpdated={fetchGroupedPackages}
-      />
-
-      <DeleteCustomerModal
-        show={showDeleteCustomerModal}
-        onHide={() => setShowDeleteCustomerModal(false)}
-        customerName={selectedCustomerForDelete.name}
-        packageCount={selectedCustomerForDelete.packageCount}
-        onCustomerDeleted={fetchGroupedPackages}
-      />
     </Container>
   );
 };
