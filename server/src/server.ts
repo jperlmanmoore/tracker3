@@ -6,9 +6,9 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 
 // Import routes
-import authRoutes from './routes/auth.js';
-import userRoutes from './routes/users.js';
-import packageRoutes from './routes/packages.js';
+import authRoutes from './routes/auth';
+import userRoutes from './routes/users';
+import packageRoutes from './routes/packages';
 
 // Load environment variables
 dotenv.config();
