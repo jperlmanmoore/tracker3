@@ -40,6 +40,19 @@
   flex-wrap: wrap;
 }
 
+.carrier-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.carrier-actions .btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  white-space: nowrap;
+}
+
 .min-vh-100 {
   min-height: 100vh;
 }
