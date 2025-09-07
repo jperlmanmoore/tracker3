@@ -316,16 +316,6 @@ const Dashboard: React.FC = () => {
                   <strong>📁 {group._id}</strong> ({group.packages?.length || 0} packages)
                 </div>
                 <div className="customer-actions">
-                  {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
-                    <Button 
-                      variant="outline-success" 
-                      size="sm"
-                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
-                      title="View Proof of Delivery for all delivered packages"
-                    >
-                      📋 View All POD
-                    </Button>
-                  )}
                   <Button 
                     variant="outline-danger" 
                     size="sm"
@@ -401,50 +391,6 @@ const Dashboard: React.FC = () => {
                         );
                       }
                     })}
-                    
-                    {/* Carrier-specific POD buttons */}
-                    {carriers.map(carrier => {
-                      const carrierPackages = packagesByCarrier[carrier];
-                      const deliveredPackages = carrierPackages.filter((pkg: any) => 
-                        pkg.status && pkg.status.toLowerCase() === 'delivered'
-                      );
-                      
-                      if (deliveredPackages.length === 0) return null;
-                      
-                      if (deliveredPackages.length === 1) {
-                        // Single delivered package - individual POD button
-                        const pkg = deliveredPackages[0];
-                        return (
-                          <Button 
-                            key={`pod-${carrier}`}
-                            variant="outline-success" 
-                            size="sm"
-                            onClick={() => openProofOfDelivery({
-                              ...pkg,
-                              customer: group._id
-                            })}
-                            className="me-1 mb-1"
-                            title="View Proof of Delivery"
-                          >
-                            📋 {carrier} POD
-                          </Button>
-                        );
-                      } else {
-                        // Multiple delivered packages - bulk POD button
-                        return (
-                          <Button 
-                            key={`pod-${carrier}`}
-                            variant="outline-success" 
-                            size="sm"
-                            onClick={() => openCarrierProofOfDelivery(group._id, carrier, carrierPackages)}
-                            className="me-1 mb-1"
-                            title={`View Proof of Delivery for all ${carrier} packages`}
-                          >
-                            📋 All {carrier} POD ({deliveredPackages.length})
-                          </Button>
-                        );
-                      }
-                    })}
                   </div>
                 )}
                 {/* Individual package actions */}
@@ -484,6 +430,48 @@ const Dashboard: React.FC = () => {
                       title="Simulate Delivery (for testing)"
                     >
                       🚚 Simulate
+                    </Button>
+                  )}
+                  
+                  {/* Carrier-specific POD buttons - only show for first package */}
+                  {index === 0 && carriers.map(carrier => {
+                    const carrierPackages = packagesByCarrier[carrier];
+                    const deliveredPackages = carrierPackages.filter((pkg: any) => 
+                      pkg.status && pkg.status.toLowerCase() === 'delivered'
+                    );
+                    
+                    if (deliveredPackages.length === 0) return null;
+                    
+                    if (deliveredPackages.length === 1) {
+                      // Single delivered package - individual POD button (skip if already shown above)
+                      return null;
+                    } else {
+                      // Multiple delivered packages - bulk POD button
+                      return (
+                        <Button 
+                          key={`pod-${carrier}`}
+                          variant="outline-success" 
+                          size="sm"
+                          onClick={() => openCarrierProofOfDelivery(group._id, carrier, carrierPackages)}
+                          className="ms-1"
+                          title={`View Proof of Delivery for all ${carrier} packages`}
+                        >
+                          📋 All {carrier} POD ({deliveredPackages.length})
+                        </Button>
+                      );
+                    }
+                  })}
+                  
+                  {/* View All POD button - only show for first package and if there are delivered packages */}
+                  {index === 0 && group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
+                    <Button 
+                      variant="outline-success" 
+                      size="sm"
+                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
+                      className="ms-1"
+                      title="View Proof of Delivery for all delivered packages"
+                    >
+                      📋 View All POD
                     </Button>
                   )}
                 </div>
