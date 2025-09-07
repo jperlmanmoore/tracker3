@@ -77,10 +77,16 @@ router.post('/', authenticateToken, async (req: Request, res: Response): Promise
     const userId = req.user._id.toString();
     const { trackingNumbers, customer, packageType, dateSent, notes } = req.body;
 
+    console.log('=== Package Creation Debug ===');
+    console.log('Request body:', req.body);
+    console.log('User ID:', userId);
+
     // Parse tracking numbers from input
     const parsedNumbers = parseTrackingNumbers(trackingNumbers);
+    console.log('Parsed tracking numbers:', parsedNumbers);
     
     if (parsedNumbers.length === 0) {
+      console.log('No tracking numbers parsed');
       res.status(400).json({
         success: false,
         message: 'At least one tracking number is required'
@@ -93,11 +99,16 @@ router.post('/', authenticateToken, async (req: Request, res: Response): Promise
 
     for (const trackingNumber of parsedNumbers) {
       try {
+        console.log(`Processing tracking number: ${trackingNumber}`);
+        
         // Auto-detect carrier
         const detectedCarrier = detectCarrier(trackingNumber);
+        console.log(`Detected carrier for ${trackingNumber}: ${detectedCarrier}`);
         
         if (!detectedCarrier) {
-          errors.push(`Could not detect carrier for tracking number: ${trackingNumber}`);
+          const errorMsg = `Could not detect carrier for tracking number: ${trackingNumber}`;
+          console.log('ERROR:', errorMsg);
+          errors.push(errorMsg);
           continue;
         }
 
@@ -128,14 +139,23 @@ router.post('/', authenticateToken, async (req: Request, res: Response): Promise
           }]
         });
 
+        // Save the new package to the database
         await newPackage.save();
+
+        console.log(`Successfully created package: ${trackingNumber}`);
         createdPackages.push(newPackage);
       } catch (error) {
-        errors.push(`Error creating package ${trackingNumber}: ${error}`);
+        const errorMsg = `Error creating package ${trackingNumber}: ${error}`;
+        console.log('ERROR:', errorMsg);
+        errors.push(errorMsg);
       }
     }
 
+    console.log(`Created ${createdPackages.length} packages`);
+    console.log('Errors:', errors);
+
     if (createdPackages.length === 0) {
+      console.log('No packages were created, returning error response');
       res.status(400).json({
         success: false,
         message: 'No packages were created',
@@ -144,6 +164,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response): Promise
       return;
     }
 
+    console.log('Returning success response');
     res.status(201).json({
       success: true,
       message: `${createdPackages.length} package(s) created successfully`,
