@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import User from '../models/User';
 import { IUserInput, IUserLogin, IUserResponse } from '../types/user';
 import { ApiResponse } from '../types/common';
-import { validateRegistration, validateLogin } from '../middleware/validation.js';
+import { validateRegistration, validateLogin } from '../middleware/validation';
 
 const router: Router = express.Router();
 
