@@ -20,53 +20,71 @@ const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
 
   useEffect(() => {
-    fetchPackages();
+    fetchGroupedPackages();
   }, []);
 
-  const fetchPackages = async (): Promise<void> => {
+  const fetchGroupedPackages = async (): Promise<void> => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get<ApiResponse<{ packages: Package[] }>>('/api/packages', {
+      const response = await axios.get<ApiResponse<any[]>>('/api/packages/grouped', {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (response.data.success && response.data.data && Array.isArray(response.data.data.packages)) {
-        setPackages(response.data.data.packages);
+      if (response.data.success && response.data.data) {
+        setPackages(response.data.data);
       } else {
-        console.error('Invalid packages data:', response.data);
-        setPackages([]); // Ensure packages is always an array
-        setError('Failed to fetch packages - invalid data format');
+        console.error('Invalid grouped packages data:', response.data);
+        setPackages([]);
+        setError('Failed to fetch grouped packages - invalid data format');
       }
     } catch (err: any) {
-      console.error('Fetch packages error:', err);
-      setPackages([]); // Ensure packages is always an array on error
-      setError(err.response?.data?.message || 'Failed to fetch packages');
+      console.error('Fetch grouped packages error:', err);
+      setPackages([]);
+      setError(err.response?.data?.message || 'Failed to fetch grouped packages');
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredAndSortedPackages = useMemo(() => {
-    // Ensure packages is always an array
-    if (!Array.isArray(packages)) {
-      console.error('Packages is not an array:', packages);
+  // Helper function to get all individual packages from grouped data
+  const getAllPackages = (groupedPackages: any[]): any[] => {
+    if (!Array.isArray(groupedPackages)) {
       return [];
     }
+    
+    const allPackages: any[] = [];
+    groupedPackages.forEach(group => {
+      if (group.packages && Array.isArray(group.packages)) {
+        group.packages.forEach((pkg: any) => {
+          allPackages.push({
+            ...pkg,
+            customer: group._id // Add customer name from group
+          });
+        });
+      }
+    });
+    
+    return allPackages;
+  };
 
-    let filtered = packages;
+  const filteredAndSortedPackages = useMemo(() => {
+    // Get all individual packages from grouped data
+    const allPackages = getAllPackages(packages);
+    
+    let filtered = allPackages;
 
     // Filter by client
     if (filterClient) {
       filtered = filtered.filter(pkg =>
-        pkg.customer.toLowerCase().includes(filterClient.toLowerCase())
+        pkg.customer && pkg.customer.toLowerCase().includes(filterClient.toLowerCase())
       );
     }
 
     // Filter by carrier
     if (filterCarrier) {
       filtered = filtered.filter(pkg =>
-        pkg.carrier.toLowerCase() === filterCarrier.toLowerCase()
+        pkg.carrier && pkg.carrier.toLowerCase() === filterCarrier.toLowerCase()
       );
     }
 
@@ -76,16 +94,16 @@ const Dashboard: React.FC = () => {
 
       switch (sortBy) {
         case 'date':
-          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          comparison = new Date(a.dateSent || a.createdAt || 0).getTime() - new Date(b.dateSent || b.createdAt || 0).getTime();
           break;
         case 'client':
-          comparison = a.customer.localeCompare(b.customer);
+          comparison = (a.customer || '').localeCompare(b.customer || '');
           break;
         case 'carrier':
-          comparison = a.carrier.localeCompare(b.carrier);
+          comparison = (a.carrier || '').localeCompare(b.carrier || '');
           break;
         case 'status':
-          comparison = a.status.localeCompare(b.status);
+          comparison = (a.status || '').localeCompare(b.status || '');
           break;
       }
 
@@ -161,6 +179,103 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const renderGroupedPackages = () => {
+    if (!Array.isArray(packages) || packages.length === 0) {
+      return <tr><td colSpan={7}>No packages found</td></tr>;
+    }
+
+    return packages.map((group: any) => {
+      // Group packages by carrier within each client
+      const packagesByCarrier = (group.packages || []).reduce((acc: any, pkg: any) => {
+        const carrier = pkg.carrier || 'Unknown';
+        if (!acc[carrier]) {
+          acc[carrier] = [];
+        }
+        acc[carrier].push(pkg);
+        return acc;
+      }, {});
+
+      const carriers = Object.keys(packagesByCarrier);
+
+      return (
+        <React.Fragment key={group._id}>
+          <tr className="client-header-row">
+            <td colSpan={7} className="client-row bg-light">
+              <strong>📁 {group._id}</strong> ({group.packages?.length || 0} packages)
+            </td>
+          </tr>
+          {group.packages?.map((pkg: any, index: number) => (
+            <tr key={index}>
+              <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
+              <td>{group._id}</td>
+              <td>
+                <a 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    openTrackingUrl(pkg.trackingNumber, pkg.carrier);
+                  }}
+                  className="text-primary"
+                >
+                  {pkg.trackingNumber}
+                </a>
+              </td>
+              <td>
+                <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
+                  {pkg.carrier}
+                </Badge>
+              </td>
+              <td>
+                <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
+                  {pkg.status || 'Unknown'}
+                </Badge>
+              </td>
+              <td>{pkg.notes || '-'}</td>
+              <td>
+                {index === 0 && (
+                  <div className="d-flex flex-column gap-1">
+                    {carriers.map(carrier => {
+                      const carrierPackages = packagesByCarrier[carrier];
+                      if (carrierPackages.length === 1) {
+                        return (
+                          <Button 
+                            key={carrier}
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
+                          >
+                            Track {carrier}
+                          </Button>
+                        );
+                      } else {
+                        // Multiple packages for this carrier - create bulk tracking URL
+                        const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
+                        const bulkUrl = carrier.toLowerCase() === 'usps' 
+                          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
+                          : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
+                        
+                        return (
+                          <Button 
+                            key={carrier}
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => window.open(bulkUrl, '_blank')}
+                          >
+                            Track All {carrier} ({carrierPackages.length})
+                          </Button>
+                        );
+                      }
+                    })}
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </React.Fragment>
+      );
+    });
+  };
+
   if (loading) {
     return (
       <Container className="mt-5 text-center">
@@ -214,11 +329,12 @@ const Dashboard: React.FC = () => {
                 <Col md={4}>
                   <Form.Group>
                     <Form.Label>Filter by Carrier</Form.Label>
+                    <label htmlFor="filter-select">Filter Options</label>
                     <Form.Select
+                      id="filter-select"
                       value={filterCarrier}
                       onChange={(e) => setFilterCarrier(e.target.value)}
                       aria-label="Filter by carrier"
-                      title="Filter packages by carrier"
                     >
                       <option value="">All Carriers</option>
                       <option value="usps">USPS</option>
@@ -246,7 +362,7 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-primary">{packages.length}</h3>
+                  <h3 className="text-primary">{getAllPackages(packages).length}</h3>
                   <p className="text-muted mb-0">Total Packages</p>
                 </Card.Body>
               </Card>
@@ -255,7 +371,7 @@ const Dashboard: React.FC = () => {
               <Card className="text-center">
                 <Card.Body>
                   <h3 className="text-success">
-                    {packages.filter(p => p.status.toLowerCase() === 'delivered').length}
+                    {getAllPackages(packages).filter(p => p.status && p.status.toLowerCase() === 'delivered').length}
                   </h3>
                   <p className="text-muted mb-0">Delivered</p>
                 </Card.Body>
@@ -265,7 +381,7 @@ const Dashboard: React.FC = () => {
               <Card className="text-center">
                 <Card.Body>
                   <h3 className="text-warning">
-                    {packages.filter(p => p.status.toLowerCase() === 'in transit').length}
+                    {getAllPackages(packages).filter(p => p.status && p.status.toLowerCase() === 'in transit').length}
                   </h3>
                   <p className="text-muted mb-0">In Transit</p>
                 </Card.Body>
@@ -275,7 +391,7 @@ const Dashboard: React.FC = () => {
               <Card className="text-center">
                 <Card.Body>
                   <h3 className="text-info">
-                    {new Set(packages.map(p => p.customer)).size}
+                    {packages.length}
                   </h3>
                   <p className="text-muted mb-0">Unique Clients</p>
                 </Card.Body>
@@ -335,58 +451,7 @@ const Dashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAndSortedPackages.map((pkg) => (
-                        <tr key={pkg._id}>
-                          <td>{new Date(pkg.createdAt).toLocaleDateString()}</td>
-                          <td>
-                            <strong>{pkg.customer}</strong>
-                            {pkg.notes && (
-                              <div className="small text-muted">{pkg.notes.substring(0, 50)}{pkg.notes.length > 50 ? '...' : ''}</div>
-                            )}
-                          </td>
-                          <td>
-                            <code
-                              className="tracking-number"
-                              onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
-                              title="Click to track"
-                            >
-                              {pkg.trackingNumber}
-                            </code>
-                          </td>
-                          <td>
-                            <Badge bg={getCarrierBadgeVariant(pkg.carrier)}>
-                              {pkg.carrier.toUpperCase()}
-                            </Badge>
-                          </td>
-                          <td>
-                            <Badge bg={getStatusBadgeVariant(pkg.status)}>
-                              {pkg.status}
-                            </Badge>
-                          </td>
-                          <td>
-                            {pkg.notes && (
-                              <span className="text-muted">{pkg.notes}</span>
-                            )}
-                          </td>
-                          <td>
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              className="me-1"
-                              onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
-                            >
-                              Track
-                            </Button>
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={() => deletePackage(pkg._id)}
-                            >
-                              Delete
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
+                      {renderGroupedPackages()}
                     </tbody>
                   </Table>
                 </div>
@@ -399,7 +464,7 @@ const Dashboard: React.FC = () => {
       <AddPackageModal
         show={showAddModal}
         onHide={() => setShowAddModal(false)}
-        onPackageAdded={fetchPackages}
+        onPackageAdded={fetchGroupedPackages}
       />
     </Container>
   );

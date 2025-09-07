@@ -123,6 +123,7 @@ const AddPackageModal: React.FC<AddPackageModalProps> = ({ show, onHide, onPacka
               <Form.Group className="mb-3">
                 <Form.Label>Package Type *</Form.Label>
                 <Form.Select
+                  id="package-select"
                   value={formData.packageType}
                   onChange={(e) => setFormData({ ...formData, packageType: e.target.value as any })}
                   required

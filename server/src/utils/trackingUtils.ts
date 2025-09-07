@@ -2,6 +2,9 @@
 export const detectCarrier = (trackingNumber: string): 'USPS' | 'FedEx' | null => {
   const cleanNumber = trackingNumber.replace(/\s+/g, '').toUpperCase();
   
+  console.log(`Detecting carrier for tracking number: ${trackingNumber}`);
+  console.log(`Cleaned tracking number: ${cleanNumber}`);
+
   // USPS patterns (check these first as they're more specific)
   const uspsPatterns = [
     /^(94|93|92|95)\d{18}$/, // USPS Priority Mail Express & Priority Mail (22 digits total)
@@ -27,6 +30,7 @@ export const detectCarrier = (trackingNumber: string): 'USPS' | 'FedEx' | null =
   // Check USPS patterns first (they're more specific)
   for (const pattern of uspsPatterns) {
     if (pattern.test(cleanNumber)) {
+      console.log(`Matched USPS pattern: ${pattern}`);
       return 'USPS';
     }
   }
@@ -34,21 +38,26 @@ export const detectCarrier = (trackingNumber: string): 'USPS' | 'FedEx' | null =
   // Check FedEx patterns
   for (const pattern of fedexPatterns) {
     if (pattern.test(cleanNumber)) {
+      console.log(`Matched FedEx pattern: ${pattern}`);
       return 'FedEx';
     }
   }
   
+  console.log('No specific pattern matched. Applying generic rules.');
   // If no specific pattern matches, try some generic rules
   // 20+ digit numbers starting with 9 are usually USPS
   if (/^9\d{19,21}$/.test(cleanNumber)) {
+    console.log('Matched generic USPS rule.');
     return 'USPS';
   }
   
   // 20 digit numbers not starting with 9 could be FedEx
   if (/^\d{20}$/.test(cleanNumber) && !cleanNumber.startsWith('9')) {
+    console.log('Matched generic FedEx rule.');
     return 'FedEx';
   }
   
+  console.log('No carrier detected.');
   return null;
 };
 

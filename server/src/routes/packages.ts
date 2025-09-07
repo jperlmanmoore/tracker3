@@ -182,6 +182,45 @@ router.post('/', authenticateToken, async (req: Request, res: Response): Promise
   }
 });
 
+// Get packages grouped by customer - MUST be before /:id route
+router.get('/grouped', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user._id.toString();
+    console.log('User ID:', userId);
+
+    const groupedPackages = await Package.aggregate([
+      { $match: { userId } },
+      {
+        $group: {
+          _id: "$customer",
+          packages: {
+            $push: {
+              trackingNumber: "$trackingNumber",
+              carrier: "$carrier",
+              dateSent: "$dateSent",
+              status: "$status"
+            }
+          }
+        }
+      },
+      { $sort: { _id: 1 } } // Sort by customer name
+    ]);
+
+    console.log('Grouped Packages:', groupedPackages);
+
+    res.json({
+      success: true,
+      data: groupedPackages
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error('Get grouped packages error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    } as ApiResponse);
+  }
+});
+
 // Get single package
 router.get('/:id', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
