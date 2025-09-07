@@ -36,12 +36,6 @@
   white-space: nowrap;
 }
 
-.customer-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
 .carrier-actions {
   display: flex;
   gap: 0.25rem;
@@ -53,6 +47,13 @@
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
   white-space: nowrap;
+}
+
+/* Edit button in tracking number column */
+.tracking-number-edit .btn {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.25rem;
+  line-height: 1;
 }
 
 .min-vh-100 {

@@ -315,16 +315,6 @@ const Dashboard: React.FC = () => {
                 <div>
                   <strong>📁 {group._id}</strong> ({group.packages?.length || 0} packages)
                 </div>
-                <div className="customer-actions">
-                  <Button 
-                    variant="outline-danger" 
-                    size="sm"
-                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
-                    title="Delete customer and all packages"
-                  >
-                    🗑️ Delete Customer
-                  </Button>
-                </div>
               </div>
             </td>
             <td></td>
@@ -334,16 +324,30 @@ const Dashboard: React.FC = () => {
               <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
               <td>{group._id}</td>
               <td>
-                <a 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    openTrackingUrl(pkg.trackingNumber, pkg.carrier);
-                  }}
-                  className="text-primary"
-                >
-                  {pkg.trackingNumber}
-                </a>
+                <div className="d-flex align-items-center gap-2">
+                  <a 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openTrackingUrl(pkg.trackingNumber, pkg.carrier);
+                    }}
+                    className="text-primary"
+                  >
+                    {pkg.trackingNumber}
+                  </a>
+                  <Button 
+                    variant="outline-secondary" 
+                    size="sm"
+                    onClick={() => openEditPackage({
+                      ...pkg,
+                      customer: group._id
+                    })}
+                    title="Edit Package"
+                    className="p-1"
+                  >
+                    ✏️
+                  </Button>
+                </div>
               </td>
               <td>
                 <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
@@ -395,17 +399,6 @@ const Dashboard: React.FC = () => {
                 )}
                 {/* Individual package actions */}
                 <div className="package-actions">
-                  <Button 
-                    variant="outline-secondary" 
-                    size="sm"
-                    onClick={() => openEditPackage({
-                      ...pkg,
-                      customer: group._id
-                    })}
-                    title="Edit Package"
-                  >
-                    ✏️ Edit
-                  </Button>
                   {pkg.status && pkg.status.toLowerCase() === 'delivered' && (
                     <Button 
                       variant="outline-success" 
@@ -472,6 +465,19 @@ const Dashboard: React.FC = () => {
                       title="View Proof of Delivery for all delivered packages"
                     >
                       📋 View All POD
+                    </Button>
+                  )}
+                  
+                  {/* Delete Customer button - only show for first package */}
+                  {index === 0 && (
+                    <Button 
+                      variant="outline-danger" 
+                      size="sm"
+                      onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
+                      className="ms-1"
+                      title="Delete customer and all packages"
+                    >
+                      🗑️ Delete Customer
                     </Button>
                   )}
                 </div>
