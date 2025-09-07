@@ -481,6 +481,154 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const renderGroupedPackages = () => {
+    if (!Array.isArray(packages) || packages.length === 0) {
+      return <tr><td colSpan={7}>No packages found</td></tr>;
+    }
+
+    return packages.map((group: any) => {
+      // Group packages by carrier within each client
+      const packagesByCarrier = (group.packages || []).reduce((acc: any, pkg: any) => {
+        const carrier = pkg.carrier || 'Unknown';
+        if (!acc[carrier]) {
+          acc[carrier] = [];
+        }
+        acc[carrier].push(pkg);
+        return acc;
+      }, {});
+
+      const carriers = Object.keys(packagesByCarrier);
+
+      return (
+        <React.Fragment key={group._id}>
+          <tr className="client-header-row">
+            <td colSpan={6} className="client-row bg-light">
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="d-flex align-items-center">
+                  <Button 
+                    variant="outline-danger" 
+                    size="sm"
+                    className="me-2"
+                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
+                    title="Delete client and all packages"
+                  >
+                    ❌
+                  </Button>
+                  <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
+                </div>
+                <div className="customer-actions">
+                  {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
+                    <Button 
+                      variant="outline-success" 
+                      size="sm"
+                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
+                      title="View Proof of Delivery for all delivered packages"
+                    >
+                      📋 View All POD
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td></td>
+          </tr>
+          {group.packages?.map((pkg: any, index: number) => (
+            <tr key={index}>
+              <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
+              <td>{group._id}</td>
+              <td className="d-flex flex-column align-items-start">
+                <div className="d-flex align-items-center">
+                  <button
+                    type="button"
+                    onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
+                    className="btn btn-link text-primary p-0 dashboard-track-btn"
+                    aria-label={`Track package ${pkg.trackingNumber}`}
+                  >
+                    {pkg.trackingNumber}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-link text-secondary p-0 ms-2"
+                    onClick={() => openEditPackage({
+                      ...pkg,
+                      customer: group._id
+                    })}
+                    title="Edit Package"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              </td>
+              <td>
+                <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
+                  {pkg.carrier}
+                </Badge>
+              </td>
+              <td>
+                <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
+                  {pkg.status || 'Unknown'}
+                </Badge>
+              </td>
+              <td>
+                {index === 0 && (
+                  <div className="d-flex flex-column gap-1">
+                    {carriers.map(carrier => {
+                      const carrierPackages = packagesByCarrier[carrier];
+                      if (carrierPackages.length === 1) {
+                        return (
+                          <Button 
+                            key={carrier}
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
+                          >
+                            Track {carrier}
+                          </Button>
+                        );
+                      } else {
+                        // Multiple packages for this carrier - create bulk tracking URL
+                        const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
+                        const bulkUrl = carrier.toLowerCase() === 'usps' 
+                          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
+                          : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
+                        
+                        return (
+                          <Button 
+                            key={carrier}
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => window.open(bulkUrl, '_blank')}
+                          >
+                            Track All {carrier} ({carrierPackages.length})
+                          </Button>
+                        );
+                      }
+                    })}
+                  </div>
+                )}
+                {/* Individual package actions */}
+                <div className="package-actions">
+                  {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
+                    <Button 
+                      variant="outline-warning" 
+                      size="sm"
+                      onClick={() => simulateDelivery({
+                        ...pkg,
+                        customer: group._id
+                      })}
+                      title="Simulate Delivery (for testing)"
+                    >
+                      🚚 Simulate
+                    </Button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </React.Fragment>
+      );
+    });
+  };
 
   if (loading) {
     return (
@@ -638,6 +786,9 @@ const Dashboard: React.FC = () => {
                           onClick={() => handleSort('client')}
                         >
                           Client {sortBy === 'client' && (sortOrder === 'asc' ? '↑' : '↓')}
+                        </th>
+                        <th>
+                          Tracking & POD
                         </th>
                         <th>
                           Tracking & POD
