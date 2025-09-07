@@ -1,10 +1,8 @@
 import express, { Request, Response, Router } from 'express';
 import Package from '../models/Package';
 import { authenticateToken } from '../middleware/auth';
-import { validatePackage } from '../middleware/validation';
-import { IPackageInput, IPackageResponse } from '../types/package';
-import { ApiResponse, PaginationParams } from '../types/common';
-import { detectCarrier, getTrackingUrl, getBulkTrackingUrl, parseTrackingNumbers } from '../utils/trackingUtils';
+import { ApiResponse } from '../types/common';
+import { detectCarrier, getTrackingUrl, getBulkTrackingUrl, parseTrackingNumbers, simulateDelivery } from '../utils/trackingUtils';
 
 const router: Router = express.Router();
 
@@ -195,10 +193,13 @@ router.get('/grouped', authenticateToken, async (req: Request, res: Response): P
           _id: "$customer",
           packages: {
             $push: {
+              _id: "$_id",
               trackingNumber: "$trackingNumber",
               carrier: "$carrier",
               dateSent: "$dateSent",
-              status: "$status"
+              status: "$status",
+              deliveryDate: "$deliveryDate",
+              notes: "$notes"
             }
           }
         }
@@ -255,7 +256,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response): Promi
   try {
     const userId = req.user._id.toString();
     const packageId = req.params.id;
-    const { notes } = req.body;
+    const { customer, packageType, dateSent, notes } = req.body;
 
     const pkg = await Package.findOne({ _id: packageId, userId });
 
@@ -267,7 +268,19 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response): Promi
       return;
     }
 
+    // Update allowed fields
+    if (customer !== undefined) pkg.customer = customer;
+    if (packageType !== undefined) pkg.packageType = packageType;
+    if (dateSent !== undefined) pkg.dateSent = new Date(dateSent);
     if (notes !== undefined) pkg.notes = notes;
+
+    // Add tracking history entry for the update
+    pkg.trackingHistory.push({
+      date: new Date(),
+      status: pkg.status,
+      description: 'Package information updated'
+    });
+
     await pkg.save();
 
     res.json({
@@ -432,6 +445,276 @@ router.get('/customers', authenticateToken, async (req: Request, res: Response):
     } as ApiResponse);
   } catch (error: any) {
     console.error('Get customers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    } as ApiResponse);
+  }
+});
+
+// Get proof of delivery for a package
+router.get('/:id/proof-of-delivery', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user._id.toString();
+    const packageId = req.params.id;
+
+    const pkg = await Package.findOne({ _id: packageId, userId }).select('proofOfDelivery trackingNumber customer carrier status deliveryDate');
+
+    if (!pkg) {
+      res.status(404).json({
+        success: false,
+        message: 'Package not found'
+      } as ApiResponse);
+      return;
+    }
+
+    // If package is not delivered yet, try to fetch proof of delivery
+    if (pkg.status !== 'Delivered') {
+      res.json({
+        success: true,
+        data: {
+          packageInfo: {
+            trackingNumber: pkg.trackingNumber,
+            customer: pkg.customer,
+            carrier: pkg.carrier,
+            status: pkg.status
+          },
+          proofOfDelivery: null,
+          message: 'Package not yet delivered'
+        }
+      } as ApiResponse);
+      return;
+    }
+
+    // Simulate fetching proof of delivery from carrier APIs
+    let simulatedProofOfDelivery = pkg.proofOfDelivery;
+    
+    if (!simulatedProofOfDelivery || Object.keys(simulatedProofOfDelivery).length === 0) {
+      // Simulate proof of delivery data
+      simulatedProofOfDelivery = {
+        deliveredTo: 'Recipient',
+        deliveryLocation: 'Front Door',
+        signatureRequired: pkg.carrier === 'FedEx' ? Math.random() > 0.5 : Math.random() > 0.7,
+        signatureObtained: false,
+        signedBy: '',
+        deliveryPhoto: pkg.carrier === 'USPS' ? (Math.random() > 0.6 ? 'https://example.com/delivery-photo.jpg' : '') : '',
+        deliveryInstructions: 'Left at front door',
+        proofOfDeliveryUrl: `https://${pkg.carrier.toLowerCase()}.com/proof-of-delivery/${pkg.trackingNumber}`,
+        lastUpdated: new Date()
+      };
+
+      // If signature required, add signature data
+      if (simulatedProofOfDelivery.signatureRequired && Math.random() > 0.3) {
+        simulatedProofOfDelivery.signatureObtained = true;
+        simulatedProofOfDelivery.signedBy = pkg.customer.split(' ')[0] || 'J.DOE';
+      }
+
+      // Update the package with proof of delivery
+      pkg.proofOfDelivery = simulatedProofOfDelivery;
+      await pkg.save();
+    }
+
+    res.json({
+      success: true,
+      data: {
+        packageInfo: {
+          trackingNumber: pkg.trackingNumber,
+          customer: pkg.customer,
+          carrier: pkg.carrier,
+          status: pkg.status,
+          deliveryDate: pkg.deliveryDate
+        },
+        proofOfDelivery: simulatedProofOfDelivery
+      }
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error('Get proof of delivery error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    } as ApiResponse);
+  }
+});
+
+// Update proof of delivery for a package
+router.put('/:id/proof-of-delivery', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user._id.toString();
+    const packageId = req.params.id;
+    const proofOfDeliveryData = req.body;
+
+    const pkg = await Package.findOne({ _id: packageId, userId });
+
+    if (!pkg) {
+      res.status(404).json({
+        success: false,
+        message: 'Package not found'
+      } as ApiResponse);
+      return;
+    }
+
+    // Update proof of delivery data
+    pkg.proofOfDelivery = {
+      ...(pkg.proofOfDelivery || {}),
+      ...proofOfDeliveryData,
+      lastUpdated: new Date()
+    };
+
+    await pkg.save();
+
+    res.json({
+      success: true,
+      message: 'Proof of delivery updated successfully',
+      data: pkg.proofOfDelivery
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error('Update proof of delivery error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    } as ApiResponse);
+  }
+});
+
+// Get proof of delivery status for multiple packages
+router.post('/proof-of-delivery/batch', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user._id.toString();
+    const { trackingNumbers } = req.body;
+
+    if (!trackingNumbers || !Array.isArray(trackingNumbers)) {
+      res.status(400).json({
+        success: false,
+        message: 'Tracking numbers array is required'
+      } as ApiResponse);
+      return;
+    }
+
+    const packages = await Package.find({
+      userId,
+      trackingNumber: { $in: trackingNumbers }
+    }).select('trackingNumber customer carrier status deliveryDate proofOfDelivery');
+
+    const proofOfDeliveryData = packages.map(pkg => ({
+      trackingNumber: pkg.trackingNumber,
+      customer: pkg.customer,
+      carrier: pkg.carrier,
+      status: pkg.status,
+      deliveryDate: pkg.deliveryDate,
+      hasProofOfDelivery: pkg.status === 'Delivered' && pkg.proofOfDelivery && Object.keys(pkg.proofOfDelivery).length > 0,
+      proofOfDelivery: pkg.status === 'Delivered' ? pkg.proofOfDelivery : null
+    }));
+
+    res.json({
+      success: true,
+      data: proofOfDeliveryData
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error('Get batch proof of delivery error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    } as ApiResponse);
+  }
+});
+
+// Simulate package delivery (for testing purposes)
+router.post('/:id/simulate-delivery', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user._id.toString();
+    const packageId = req.params.id;
+
+    const pkg = await Package.findOne({ _id: packageId, userId });
+
+    if (!pkg) {
+      res.status(404).json({
+        success: false,
+        message: 'Package not found'
+      } as ApiResponse);
+      return;
+    }
+
+    if (pkg.status === 'Delivered') {
+      res.status(400).json({
+        success: false,
+        message: 'Package is already delivered'
+      } as ApiResponse);
+      return;
+    }
+
+    // Simulate delivery
+    const deliveryData = simulateDelivery(pkg.trackingNumber, pkg.carrier);
+    
+    pkg.status = deliveryData.status;
+    pkg.deliveryDate = deliveryData.deliveryDate;
+    pkg.proofOfDelivery = deliveryData.proofOfDelivery;
+    
+    // Add tracking history entry
+    pkg.trackingHistory.push({
+      date: new Date(),
+      status: 'Delivered',
+      description: 'Package delivered - Simulated for testing'
+    });
+
+    await pkg.save();
+
+    res.json({
+      success: true,
+      message: 'Package delivery simulated successfully',
+      data: {
+        package: pkg,
+        proofOfDelivery: pkg.proofOfDelivery
+      }
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error('Simulate delivery error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    } as ApiResponse);
+  }
+});
+
+// Delete all packages for a customer
+router.delete('/customer/:customerName', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user._id.toString();
+    const customerName = req.params.customerName;
+    
+    if (!customerName) {
+      res.status(400).json({
+        success: false,
+        message: 'Customer name is required'
+      } as ApiResponse);
+      return;
+    }
+
+    const decodedCustomerName = decodeURIComponent(customerName);
+
+    // Find all packages for this customer
+    const packages = await Package.find({ userId, customer: decodedCustomerName });
+    
+    if (packages.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'No packages found for this customer'
+      } as ApiResponse);
+      return;
+    }
+
+    // Delete all packages for this customer
+    const deleteResult = await Package.deleteMany({ userId, customer: decodedCustomerName });
+
+    res.json({
+      success: true,
+      message: `Deleted ${deleteResult.deletedCount} package(s) for customer: ${decodedCustomerName}`,
+      data: {
+        deletedCount: deleteResult.deletedCount,
+        customerName: decodedCustomerName
+      }
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error('Delete customer packages error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

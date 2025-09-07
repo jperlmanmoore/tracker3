@@ -6,6 +6,19 @@ export interface TrackingEvent {
   description?: string;
 }
 
+// Proof of delivery information
+export interface ProofOfDelivery {
+  deliveredTo?: string;
+  deliveryLocation?: string;
+  signatureRequired?: boolean;
+  signatureObtained?: boolean;
+  signedBy?: string;
+  deliveryPhoto?: string;
+  deliveryInstructions?: string;
+  proofOfDeliveryUrl?: string;
+  lastUpdated?: string;
+}
+
 // Package data structure
 export interface Package {
   _id: string;
@@ -22,6 +35,7 @@ export interface Package {
   notes?: string;
   description?: string; // alias for notes
   trackingHistory: TrackingEvent[];
+  proofOfDelivery?: ProofOfDelivery;
   lastUpdated: string;
   userId: string;
   createdAt: string;

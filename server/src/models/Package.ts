@@ -1,5 +1,5 @@
 import mongoose, { Schema, Model } from 'mongoose';
-import { IPackage, TrackingEvent } from '../types/package';
+import { IPackage, TrackingEvent, ProofOfDelivery } from '../types/package';
 
 const TrackingEventSchema = new Schema<TrackingEvent>({
   date: {
@@ -17,6 +17,45 @@ const TrackingEventSchema = new Schema<TrackingEvent>({
   description: {
     type: String,
     default: ''
+  }
+}, { _id: false });
+
+const ProofOfDeliverySchema = new Schema({
+  deliveredTo: {
+    type: String,
+    default: ''
+  },
+  deliveryLocation: {
+    type: String,
+    default: ''
+  },
+  signatureRequired: {
+    type: Boolean,
+    default: false
+  },
+  signatureObtained: {
+    type: Boolean,
+    default: false
+  },
+  signedBy: {
+    type: String,
+    default: ''
+  },
+  deliveryPhoto: {
+    type: String,
+    default: ''
+  },
+  deliveryInstructions: {
+    type: String,
+    default: ''
+  },
+  proofOfDeliveryUrl: {
+    type: String,
+    default: ''
+  },
+  lastUpdated: {
+    type: Date,
+    default: Date.now
   }
 }, { _id: false });
 
@@ -61,6 +100,10 @@ const PackageSchema = new Schema<IPackage>({
     default: ''
   },
   trackingHistory: [TrackingEventSchema],
+  proofOfDelivery: {
+    type: ProofOfDeliverySchema,
+    default: () => ({})
+  },
   lastUpdated: {
     type: Date,
     default: Date.now

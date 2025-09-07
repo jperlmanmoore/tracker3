@@ -4,6 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { Package } from '../types/package';
 import { ApiResponse } from '../types/common';
 import AddPackageModal from './AddPackageModal';
+import ProofOfDeliveryModal from './ProofOfDeliveryModal';
+import BulkProofOfDeliveryModal from './BulkProofOfDeliveryModal';
+import EditPackageModal from './EditPackageModal';
+import DeleteCustomerModal from './DeleteCustomerModal';
 import axios from 'axios';
 import './Dashboard.css';
 
@@ -16,6 +20,30 @@ const Dashboard: React.FC = () => {
   const [filterClient, setFilterClient] = useState<string>('');
   const [filterCarrier, setFilterCarrier] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showProofModal, setShowProofModal] = useState<boolean>(false);
+  const [showBulkProofModal, setShowBulkProofModal] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showDeleteCustomerModal, setShowDeleteCustomerModal] = useState<boolean>(false);
+  const [selectedPackage, setSelectedPackage] = useState<{
+    id?: string;
+    trackingNumber?: string;
+    customer?: string;
+    carrier?: string;
+  }>({});
+  const [selectedPackageForEdit, setSelectedPackageForEdit] = useState<any>(null);
+  const [selectedCustomerForDelete, setSelectedCustomerForDelete] = useState<{
+    name: string;
+    packageCount: number;
+  }>({ name: '', packageCount: 0 });
+  const [selectedCustomer, setSelectedCustomer] = useState<{
+    name: string;
+    packages: Array<{
+      trackingNumber: string;
+      carrier: string;
+      status: string;
+      deliveryDate?: string;
+    }>;
+  }>({ name: '', packages: [] });
 
   const { user, logout } = useAuth();
 
@@ -153,6 +181,64 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const openProofOfDelivery = (packageData: any): void => {
+    setSelectedPackage({
+      id: packageData._id,
+      trackingNumber: packageData.trackingNumber,
+      customer: packageData.customer,
+      carrier: packageData.carrier
+    });
+    setShowProofModal(true);
+  };
+
+  const openBulkProofOfDelivery = (customer: string, packages: any[]): void => {
+    setSelectedCustomer({
+      name: customer,
+      packages: packages.map(pkg => ({
+        trackingNumber: pkg.trackingNumber,
+        carrier: pkg.carrier,
+        status: pkg.status,
+        deliveryDate: pkg.deliveryDate
+      }))
+    });
+    setShowBulkProofModal(true);
+  };
+
+  const simulateDelivery = async (packageData: any): Promise<void> => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`/api/packages/${packageData._id}/simulate-delivery`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        // Refresh the packages list to show updated status
+        fetchGroupedPackages();
+      } else {
+        setError(response.data.message || 'Failed to simulate delivery');
+      }
+    } catch (err: any) {
+      console.error('Simulate delivery error:', err);
+      setError(err.response?.data?.message || 'Failed to simulate delivery');
+    }
+  };
+
+  const openEditPackage = (packageData: any): void => {
+    setSelectedPackageForEdit({
+      ...packageData,
+      customer: packageData.customer || packageData.clientName
+    });
+    setShowEditModal(true);
+  };
+
+  const openDeleteCustomer = (customerName: string, packageCount: number): void => {
+    setSelectedCustomerForDelete({
+      name: customerName,
+      packageCount
+    });
+    setShowDeleteCustomerModal(true);
+  };
+
   const handleSort = (column: 'date' | 'client' | 'carrier' | 'status'): void => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -200,9 +286,34 @@ const Dashboard: React.FC = () => {
       return (
         <React.Fragment key={group._id}>
           <tr className="client-header-row">
-            <td colSpan={7} className="client-row bg-light">
-              <strong>📁 {group._id}</strong> ({group.packages?.length || 0} packages)
+            <td colSpan={6} className="client-row bg-light">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>📁 {group._id}</strong> ({group.packages?.length || 0} packages)
+                </div>
+                <div className="customer-actions">
+                  {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
+                    <Button 
+                      variant="outline-success" 
+                      size="sm"
+                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
+                      title="View Proof of Delivery for all delivered packages"
+                    >
+                      📋 View All POD
+                    </Button>
+                  )}
+                  <Button 
+                    variant="outline-danger" 
+                    size="sm"
+                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
+                    title="Delete customer and all packages"
+                  >
+                    🗑️ Delete Customer
+                  </Button>
+                </div>
+              </div>
             </td>
+            <td></td>
           </tr>
           {group.packages?.map((pkg: any, index: number) => (
             <tr key={index}>
@@ -268,6 +379,46 @@ const Dashboard: React.FC = () => {
                     })}
                   </div>
                 )}
+                {/* Individual package actions */}
+                <div className="package-actions">
+                  <Button 
+                    variant="outline-secondary" 
+                    size="sm"
+                    onClick={() => openEditPackage({
+                      ...pkg,
+                      customer: group._id
+                    })}
+                    title="Edit Package"
+                  >
+                    ✏️ Edit
+                  </Button>
+                  {pkg.status && pkg.status.toLowerCase() === 'delivered' && (
+                    <Button 
+                      variant="outline-success" 
+                      size="sm"
+                      onClick={() => openProofOfDelivery({
+                        ...pkg,
+                        customer: group._id
+                      })}
+                      title="View Proof of Delivery"
+                    >
+                      📋 POD
+                    </Button>
+                  )}
+                  {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
+                    <Button 
+                      variant="outline-warning" 
+                      size="sm"
+                      onClick={() => simulateDelivery({
+                        ...pkg,
+                        customer: group._id
+                      })}
+                      title="Simulate Delivery (for testing)"
+                    >
+                      🚚 Simulate
+                    </Button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -465,6 +616,37 @@ const Dashboard: React.FC = () => {
         show={showAddModal}
         onHide={() => setShowAddModal(false)}
         onPackageAdded={fetchGroupedPackages}
+      />
+
+      <ProofOfDeliveryModal
+        show={showProofModal}
+        onHide={() => setShowProofModal(false)}
+        packageId={selectedPackage.id}
+        trackingNumber={selectedPackage.trackingNumber}
+        customer={selectedPackage.customer}
+        carrier={selectedPackage.carrier}
+      />
+
+      <BulkProofOfDeliveryModal
+        show={showBulkProofModal}
+        onHide={() => setShowBulkProofModal(false)}
+        customer={selectedCustomer.name}
+        packages={selectedCustomer.packages}
+      />
+
+      <EditPackageModal
+        show={showEditModal}
+        onHide={() => setShowEditModal(false)}
+        package={selectedPackageForEdit}
+        onPackageUpdated={fetchGroupedPackages}
+      />
+
+      <DeleteCustomerModal
+        show={showDeleteCustomerModal}
+        onHide={() => setShowDeleteCustomerModal(false)}
+        customerName={selectedCustomerForDelete.name}
+        packageCount={selectedCustomerForDelete.packageCount}
+        onCustomerDeleted={fetchGroupedPackages}
       />
     </Container>
   );

@@ -90,3 +90,39 @@ export const parseTrackingNumbers = (input: string): string[] => {
     .map(num => num.trim())
     .filter(num => num.length > 0);
 };
+
+// Simulate delivery status update (for testing)
+export const simulateDelivery = (trackingNumber: string, carrier: 'USPS' | 'FedEx'): {
+  status: string;
+  deliveryDate: Date;
+  proofOfDelivery: any;
+} => {
+  const baseProofOfDelivery = {
+    deliveredTo: 'Recipient',
+    deliveryLocation: Math.random() > 0.5 ? 'Front Door' : 'Mailbox',
+    signatureRequired: carrier === 'FedEx' ? Math.random() > 0.4 : Math.random() > 0.7,
+    signatureObtained: false,
+    signedBy: '',
+    deliveryPhoto: '',
+    deliveryInstructions: Math.random() > 0.5 ? 'Left at front door' : 'Delivered to secure location',
+    proofOfDeliveryUrl: `https://${carrier.toLowerCase()}.com/proof-of-delivery/${trackingNumber}`,
+    lastUpdated: new Date()
+  };
+
+  // If signature required, randomly add signature data
+  if (baseProofOfDelivery.signatureRequired && Math.random() > 0.3) {
+    baseProofOfDelivery.signatureObtained = true;
+    baseProofOfDelivery.signedBy = 'J.DOE';
+  }
+
+  // USPS sometimes has delivery photos
+  if (carrier === 'USPS' && Math.random() > 0.6) {
+    baseProofOfDelivery.deliveryPhoto = `https://tools.usps.com/images/delivery-photo-${trackingNumber}.jpg`;
+  }
+
+  return {
+    status: 'Delivered',
+    deliveryDate: new Date(),
+    proofOfDelivery: baseProofOfDelivery
+  };
+};

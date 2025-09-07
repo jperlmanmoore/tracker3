@@ -15,6 +15,31 @@
   text-decoration: underline;
 }
 
+.client-header-row {
+  font-weight: 600;
+}
+
+.client-row {
+  border-left: 4px solid #007bff;
+}
+
+.package-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.package-actions .btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.customer-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .min-vh-100 {
   min-height: 100vh;
 }
