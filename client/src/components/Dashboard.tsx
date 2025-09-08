@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Container, Row, Col, Card, Button, Table, Form, Badge, Alert, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Table, Form, Badge, Alert, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
-
 import { Package } from '../types/package';
 import { ApiResponse } from '../types/common';
 import AddPackageModal from './AddPackageModal';
@@ -10,24 +9,15 @@ import BulkProofOfDeliveryModal from './BulkProofOfDeliveryModal';
 import EditPackageModal from './EditPackageModal';
 import DeleteCustomerModal from './DeleteCustomerModal';
 import axios from 'axios';
+import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaTruck, FaSearch, FaFilter, FaSortUp, FaSortDown } from 'react-icons/fa';
 import './Dashboard.css';
-
-// Type for grouped packages by client
-type GroupedPackages = {
-  _id: string;
-  packages: Package[];
-};
 
 const Dashboard: React.FC = () => {
   // ...existing useState declarations...
 
-  // ...existing useState declarations...
 
-  // ...existing useState declarations...
-
-  // Grouped filter/sort logic for table rendering
-  // (Moved below all useState declarations)
-  const [packages, setPackages] = useState<GroupedPackages[]>([]);
+  // State declarations
+  const [packages, setPackages] = useState<Array<{ _id: string; packages: Package[] }>>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [sortBy, setSortBy] = useState<'date' | 'client' | 'carrier' | 'status'>('date');
@@ -107,53 +97,6 @@ const Dashboard: React.FC = () => {
     }>;
   }>({ name: '', packages: [] });
 
-    // Grouped filter/sort logic for table rendering
-    const filteredAndSortedGroupedPackages = useMemo(() => {
-      if (!Array.isArray(packages)) return [];
-
-      // Filter groups by client name if needed
-      let groups = packages;
-      if (filterClient) {
-        groups = groups.filter(group =>
-          group._id && group._id.toLowerCase().includes(filterClient.toLowerCase())
-        );
-      }
-
-      // For each group, filter and sort its packages
-      return groups
-        .map(group => {
-          let pkgs: Package[] = group.packages || [];
-
-          // Filter by carrier
-          if (filterCarrier) {
-            pkgs = pkgs.filter((pkg: Package) =>
-              pkg.carrier && pkg.carrier.toLowerCase() === filterCarrier.toLowerCase()
-            );
-          }
-
-          // Sort packages
-          pkgs = pkgs.slice().sort((a: Package, b: Package) => {
-            let comparison = 0;
-            switch (sortBy) {
-              case 'date':
-                comparison = new Date(a.dateSent || a.createdAt || 0).getTime() - new Date(b.dateSent || b.createdAt || 0).getTime();
-                break;
-              case 'carrier':
-                comparison = (a.carrier || '').localeCompare(b.carrier || '');
-                break;
-              case 'status':
-                comparison = (a.status || '').localeCompare(b.status || '');
-                break;
-            }
-            return sortOrder === 'desc' ? -comparison : comparison;
-          });
-
-          return { ...group, packages: pkgs };
-        })
-        // Remove groups with no packages after filtering
-        .filter(group => group.packages && group.packages.length > 0);
-    }, [packages, filterClient, filterCarrier, sortBy, sortOrder]);
-
   // Moved out of useState
   const renderGroupedPackages = (groupedData: any[]): React.ReactNode => {
     const data = Array.isArray(groupedData) ? groupedData : [];
@@ -179,27 +122,34 @@ const Dashboard: React.FC = () => {
             <td colSpan={6} className="client-row bg-light">
               <div className="d-flex justify-content-between align-items-center">
                 <div className="d-flex align-items-center">
-                  <Button 
-                    variant="outline-danger" 
-                    size="sm"
-                    className="me-2"
-                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
-                    title="Delete client and all packages"
-                  >
-                    ❌
-                  </Button>
+                  <OverlayTrigger placement="top" overlay={<Tooltip>Delete Client and All Packages</Tooltip>}>
+                    <Button 
+                      variant="outline-danger" 
+                      size="sm"
+                      className="me-2 d-flex align-items-center gap-1"
+                      onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
+                      title="Delete client and all packages"
+                    >
+                      {FaTrash({size: 12})}
+                      Delete
+                    </Button>
+                  </OverlayTrigger>
                   <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
                 </div>
                 <div className="customer-actions">
                   {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
-                    <Button 
-                      variant="outline-success" 
-                      size="sm"
-                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
-                      title="View Proof of Delivery for all delivered packages"
-                    >
-                      📋 View All POD
-                    </Button>
+                    <OverlayTrigger placement="top" overlay={<Tooltip>View Proof of Delivery for All Delivered Packages</Tooltip>}>
+                      <Button 
+                        variant="outline-success" 
+                        size="sm"
+                        className="d-flex align-items-center gap-1"
+                        onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
+                        title="View Proof of Delivery for all delivered packages"
+                      >
+                        {FaEye({size: 12})}
+                        View All POD
+                      </Button>
+                    </OverlayTrigger>
                   )}
                 </div>
               </div>
@@ -210,35 +160,44 @@ const Dashboard: React.FC = () => {
             <tr key={index}>
               <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
               <td>{group._id}</td>
-              <td className="d-flex flex-column align-items-start">
-                <div className="d-flex align-items-center">
-                  <button
-                    type="button"
-                    onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
-                    className="btn btn-link text-primary p-0 dashboard-track-btn"
-                    aria-label={`Track package ${pkg.trackingNumber}`}
-                  >
-                    {pkg.trackingNumber}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-link text-secondary p-0 ms-2"
-                    onClick={() => openEditPackage({
-                      ...pkg,
-                      customer: group._id
-                    })}
-                    title="Edit Package"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-link text-danger p-0 ms-2"
-                    onClick={() => deletePackage(pkg._id)}
-                    title="Delete Package"
-                  >
-                    🗑️
-                  </button>
+              <td className="d-flex align-items-center">
+                <div className="d-flex align-items-center gap-2">
+                  <OverlayTrigger placement="top" overlay={<Tooltip>Track Package</Tooltip>}>
+                    <button
+                      type="button"
+                      onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
+                      className="btn btn-link text-primary p-0 dashboard-track-btn"
+                      aria-label={`Track package ${pkg.trackingNumber}`}
+                    >
+                      {FaSearch({size: 14, className: "me-1"})}
+                      {pkg.trackingNumber}
+                    </button>
+                  </OverlayTrigger>
+                  <div className="d-flex gap-1">
+                    <OverlayTrigger placement="top" overlay={<Tooltip>Edit Package</Tooltip>}>
+                      <button
+                        type="button"
+                        className="btn btn-link text-secondary p-0"
+                        onClick={() => openEditPackage({
+                          ...pkg,
+                          customer: group._id
+                        })}
+                        title="Edit Package"
+                      >
+                        {FaEdit({size: 12})}
+                      </button>
+                    </OverlayTrigger>
+                    <OverlayTrigger placement="top" overlay={<Tooltip>Delete Package</Tooltip>}>
+                      <button
+                        type="button"
+                        className="btn btn-link text-danger p-0"
+                        onClick={() => deletePackage(pkg._id)}
+                        title="Delete Package"
+                      >
+                        {FaTrash({size: 12})}
+                      </button>
+                    </OverlayTrigger>
+                  </div>
                 </div>
               </td>
               <td>
@@ -258,14 +217,17 @@ const Dashboard: React.FC = () => {
                       const carrierPackages = packagesByCarrier[carrier];
                       if (carrierPackages.length === 1) {
                         return (
-                          <Button 
-                            key={carrier}
-                            variant="outline-primary" 
-                            size="sm"
-                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
-                          >
-                            Track {carrier}
-                          </Button>
+                          <OverlayTrigger key={carrier} placement="top" overlay={<Tooltip>Track {carrier} Package</Tooltip>}>
+                            <Button 
+                              variant="outline-primary" 
+                              size="sm"
+                              className="d-flex align-items-center gap-1"
+                              onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
+                            >
+                              {FaSearch({size: 12})}
+                              Track {carrier}
+                            </Button>
+                          </OverlayTrigger>
                         );
                       } else {
                         // Multiple packages for this carrier - create bulk tracking URL
@@ -275,14 +237,17 @@ const Dashboard: React.FC = () => {
                           : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
                         
                         return (
-                          <Button 
-                            key={carrier}
-                            variant="outline-primary" 
-                            size="sm"
-                            onClick={() => window.open(bulkUrl, '_blank')}
-                          >
-                            Track All {carrier} ({carrierPackages.length})
-                          </Button>
+                          <OverlayTrigger key={carrier} placement="top" overlay={<Tooltip>Track All {carrier} Packages</Tooltip>}>
+                            <Button 
+                              variant="outline-primary" 
+                              size="sm"
+                              className="d-flex align-items-center gap-1"
+                              onClick={() => window.open(bulkUrl, '_blank')}
+                            >
+                              {FaSearch({size: 12})}
+                              Track All {carrier} ({carrierPackages.length})
+                            </Button>
+                          </OverlayTrigger>
                         );
                       }
                     })}
@@ -291,17 +256,21 @@ const Dashboard: React.FC = () => {
                 {/* Individual package actions */}
                 <div className="package-actions">
                   {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
-                    <Button 
-                      variant="outline-warning" 
-                      size="sm"
-                      onClick={() => simulateDelivery({
-                        ...pkg,
-                        customer: group._id
-                      })}
-                      title="Simulate Delivery (for testing)"
-                    >
-                      🚚 Simulate
-                    </Button>
+                    <OverlayTrigger placement="top" overlay={<Tooltip>Simulate Delivery</Tooltip>}>
+                      <Button 
+                        variant="outline-warning" 
+                        size="sm"
+                        onClick={() => simulateDelivery({
+                          ...pkg,
+                          customer: group._id
+                        })}
+                        className="d-flex align-items-center gap-1"
+                        title="Simulate Delivery (for testing)"
+                      >
+                        {FaTruck({size: 12})}
+                        Simulate
+                      </Button>
+                    </OverlayTrigger>
                   )}
                 </div>
               </td>
@@ -343,26 +312,7 @@ const Dashboard: React.FC = () => {
   };
 
   // Helper function to get all individual packages from grouped data
-  const getAllPackages = (groupedPackages: any[]): any[] => {
-    if (!Array.isArray(groupedPackages)) {
-      return [];
-    }
-    
-    const allPackages: any[] = [];
-    groupedPackages.forEach(group => {
-      if (group.packages && Array.isArray(group.packages)) {
-        group.packages.forEach((pkg: any) => {
-          allPackages.push({
-            ...pkg,
-            customer: group._id // Add customer name from group
-          });
-        });
-      }
-    });
-    
-    return allPackages;
-  };
-
+  // ...existing code...
 
   const getStatusBadgeVariant = (status: string): string => {
     switch (status.toLowerCase()) {
@@ -402,16 +352,6 @@ const Dashboard: React.FC = () => {
     if (url) {
       window.open(url, '_blank');
     }
-  };
-
-  const openProofOfDelivery = (packageData: any): void => {
-    setSelectedPackage({
-      id: packageData._id,
-      trackingNumber: packageData.trackingNumber,
-      customer: packageData.customer,
-      carrier: packageData.carrier
-    });
-    setShowProofModal(true);
   };
 
   const openBulkProofOfDelivery = (customer: string, packages: any[]): void => {
@@ -498,34 +438,43 @@ const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <Container className="mt-5 text-center">
-        <Spinner animation="border" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </Spinner>
+      <Container className="mt-5 text-center fade-in">
+        <Card className="p-5 shadow">
+          <Spinner animation="border" role="status" className="mb-3">
+            <span className="visually-hidden">Loading packages...</span>
+          </Spinner>
+          <h5 className="text-muted">Loading your packages...</h5>
+        </Card>
       </Container>
     );
   }
 
   return (
-    <Container fluid className="py-4">
+    <Container fluid className="py-4 fade-in">
       <Row>
         <Col>
           <div className="d-flex justify-content-between align-items-center mb-4">
             <div>
-              <h1 className="text-primary">📦 Package Dashboard</h1>
+              <h1 className="text-primary mb-3">📦 Package Dashboard</h1>
               <p className="text-muted mb-0">Welcome back, {user?.firstName || user?.username}!</p>
             </div>
-            <div>
-              <Button 
-                variant="success" 
-                className="me-2"
-                onClick={() => setShowAddModal(true)}
-              >
-                + Add Package
-              </Button>
-              <Button variant="outline-secondary" onClick={logout}>
-                Logout
-              </Button>
+            <div className="d-flex gap-2">
+              <OverlayTrigger placement="bottom" overlay={<Tooltip>Add New Package</Tooltip>}>
+                <Button 
+                  variant="primary" 
+                  className="d-flex align-items-center gap-2"
+                  onClick={() => setShowAddModal(true)}
+                >
+                  {FaPlus({size: 14})}
+                  Add Package
+                </Button>
+              </OverlayTrigger>
+              <OverlayTrigger placement="bottom" overlay={<Tooltip>Logout</Tooltip>}>
+                <Button variant="outline-secondary" onClick={logout} className="d-flex align-items-center gap-2">
+                  {FaSignOutAlt({size: 14})}
+                  Logout
+                </Button>
+              </OverlayTrigger>
             </div>
           </div>
 
@@ -548,13 +497,13 @@ const Dashboard: React.FC = () => {
                 </Col>
                 <Col md={4}>
                   <Form.Group>
-                    <Form.Label>Filter by Carrier</Form.Label>
-                    <label htmlFor="filter-select">Filter Options</label>
+                    <Form.Label htmlFor="filter-select">Filter by Carrier</Form.Label>
                     <Form.Select
                       id="filter-select"
                       value={filterCarrier}
                       onChange={(e) => setFilterCarrier(e.target.value)}
                       aria-label="Filter by carrier"
+                      title="Filter by carrier"
                     >
                       <option value="">All Carriers</option>
                       <option value="usps">USPS</option>
@@ -563,15 +512,19 @@ const Dashboard: React.FC = () => {
                   </Form.Group>
                 </Col>
                 <Col md={4} className="d-flex align-items-end">
-                  <Button 
-                    variant="outline-secondary" 
-                    onClick={() => {
-                      setFilterClient('');
-                      setFilterCarrier('');
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
+                  <OverlayTrigger placement="top" overlay={<Tooltip>Clear All Filters</Tooltip>}>
+                    <Button 
+                      variant="outline-secondary" 
+                      className="d-flex align-items-center gap-2"
+                      onClick={() => {
+                        setFilterClient('');
+                        setFilterCarrier('');
+                      }}
+                    >
+                      {FaFilter({size: 14})}
+                      Clear Filters
+                    </Button>
+                  </OverlayTrigger>
                 </Col>
               </Row>
             </Card.Body>
@@ -582,7 +535,9 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-primary">{getAllPackages(packages).length}</h3>
+                  <h3 className="text-primary">{
+                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)
+                  }</h3>
                   <p className="text-muted mb-0">Total Packages</p>
                 </Card.Body>
               </Card>
@@ -590,9 +545,9 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-success">
-                    {getAllPackages(packages).filter(p => p.status && p.status.toLowerCase() === 'delivered').length}
-                  </h3>
+                  <h3 className="text-success">{
+                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'delivered').length, 0)
+                  }</h3>
                   <p className="text-muted mb-0">Delivered</p>
                 </Card.Body>
               </Card>
@@ -600,9 +555,9 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-warning">
-                    {getAllPackages(packages).filter(p => p.status && p.status.toLowerCase() === 'in transit').length}
-                  </h3>
+                  <h3 className="text-warning">{
+                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'in transit').length, 0)
+                  }</h3>
                   <p className="text-muted mb-0">In Transit</p>
                 </Card.Body>
               </Card>
@@ -610,9 +565,7 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-info">
-                    {packages.length}
-                  </h3>
+                  <h3 className="text-info">{filteredAndSortedGroupedPackages.length}</h3>
                   <p className="text-muted mb-0">Unique Clients</p>
                 </Card.Body>
               </Card>
@@ -623,7 +576,7 @@ const Dashboard: React.FC = () => {
           <Card>
             <Card.Body>
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="mb-0">Package List ({filteredAndSortedGroupedPackages.length})</h5>
+                <h5 className="mb-0">Package List ({filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)})</h5>
                 <small className="text-muted">
                   Sorted by {sortBy} ({sortOrder === 'asc' ? 'ascending' : 'descending'})
                 </small>
@@ -645,16 +598,13 @@ const Dashboard: React.FC = () => {
                           className="sortable-header"
                           onClick={() => handleSort('date')}
                         >
-                          Date Added {sortBy === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
+                          Date Added {sortBy === 'date' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
                         <th 
                           className="sortable-header"
                           onClick={() => handleSort('client')}
                         >
-                          Client {sortBy === 'client' && (sortOrder === 'asc' ? '↑' : '↓')}
-                        </th>
-                        <th>
-                          Tracking & POD
+                          Client {sortBy === 'client' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
                         <th>
                           Tracking & POD
@@ -663,19 +613,18 @@ const Dashboard: React.FC = () => {
                           className="sortable-header"
                           onClick={() => handleSort('carrier')}
                         >
-                          Carrier {sortBy === 'carrier' && (sortOrder === 'asc' ? '↑' : '↓')}
+                          Carrier {sortBy === 'carrier' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
                         <th 
                           className="sortable-header"
                           onClick={() => handleSort('status')}
                         >
-                          Status {sortBy === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
+                          Status {sortBy === 'status' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
                         <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {renderGroupedPackages(filteredAndSortedGroupedPackages)}
                       {renderGroupedPackages(filteredAndSortedGroupedPackages)}
                     </tbody>
                   </Table>

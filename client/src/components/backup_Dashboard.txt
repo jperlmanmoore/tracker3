@@ -285,70 +285,7 @@ const Dashboard: React.FC = () => {
   };
 
   // Helper function to get all individual packages from grouped data
-  const getAllPackages = (groupedPackages: any[]): any[] => {
-    if (!Array.isArray(groupedPackages)) {
-      return [];
-    }
-    
-    const allPackages: any[] = [];
-    groupedPackages.forEach(group => {
-      if (group.packages && Array.isArray(group.packages)) {
-        group.packages.forEach((pkg: any) => {
-          allPackages.push({
-            ...pkg,
-            customer: group._id // Add customer name from group
-          });
-        });
-      }
-    });
-    
-    return allPackages;
-  };
-
-  const filteredAndSortedPackages = useMemo(() => {
-    // Get all individual packages from grouped data
-    const allPackages = getAllPackages(packages);
-    
-    let filtered = allPackages;
-
-    // Filter by client
-    if (filterClient) {
-      filtered = filtered.filter(pkg =>
-        pkg.customer && pkg.customer.toLowerCase().includes(filterClient.toLowerCase())
-      );
-    }
-
-    // Filter by carrier
-    if (filterCarrier) {
-      filtered = filtered.filter(pkg =>
-        pkg.carrier && pkg.carrier.toLowerCase() === filterCarrier.toLowerCase()
-      );
-    }
-
-    // Sort packages
-    filtered.sort((a, b) => {
-      let comparison = 0;
-
-      switch (sortBy) {
-        case 'date':
-          comparison = new Date(a.dateSent || a.createdAt || 0).getTime() - new Date(b.dateSent || b.createdAt || 0).getTime();
-          break;
-        case 'client':
-          comparison = (a.customer || '').localeCompare(b.customer || '');
-          break;
-        case 'carrier':
-          comparison = (a.carrier || '').localeCompare(b.carrier || '');
-          break;
-        case 'status':
-          comparison = (a.status || '').localeCompare(b.status || '');
-          break;
-      }
-
-      return sortOrder === 'desc' ? -comparison : comparison;
-    });
-
-    return filtered;
-  }, [packages, filterClient, filterCarrier, sortBy, sortOrder]);
+  // ...existing code...
 
   const getStatusBadgeVariant = (status: string): string => {
     switch (status.toLowerCase()) {
@@ -388,16 +325,6 @@ const Dashboard: React.FC = () => {
     if (url) {
       window.open(url, '_blank');
     }
-  };
-
-  const openProofOfDelivery = (packageData: any): void => {
-    setSelectedPackage({
-      id: packageData._id,
-      trackingNumber: packageData.trackingNumber,
-      customer: packageData.customer,
-      carrier: packageData.carrier
-    });
-    setShowProofModal(true);
   };
 
   const openBulkProofOfDelivery = (customer: string, packages: any[]): void => {
@@ -534,13 +461,13 @@ const Dashboard: React.FC = () => {
                 </Col>
                 <Col md={4}>
                   <Form.Group>
-                    <Form.Label>Filter by Carrier</Form.Label>
-                    <label htmlFor="filter-select">Filter Options</label>
+                    <Form.Label htmlFor="filter-select">Filter by Carrier</Form.Label>
                     <Form.Select
                       id="filter-select"
                       value={filterCarrier}
                       onChange={(e) => setFilterCarrier(e.target.value)}
                       aria-label="Filter by carrier"
+                      title="Filter by carrier"
                     >
                       <option value="">All Carriers</option>
                       <option value="usps">USPS</option>
@@ -568,7 +495,9 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-primary">{getAllPackages(packages).length}</h3>
+                  <h3 className="text-primary">{
+                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)
+                  }</h3>
                   <p className="text-muted mb-0">Total Packages</p>
                 </Card.Body>
               </Card>
@@ -576,9 +505,9 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-success">
-                    {getAllPackages(packages).filter(p => p.status && p.status.toLowerCase() === 'delivered').length}
-                  </h3>
+                  <h3 className="text-success">{
+                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'delivered').length, 0)
+                  }</h3>
                   <p className="text-muted mb-0">Delivered</p>
                 </Card.Body>
               </Card>
@@ -586,9 +515,9 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-warning">
-                    {getAllPackages(packages).filter(p => p.status && p.status.toLowerCase() === 'in transit').length}
-                  </h3>
+                  <h3 className="text-warning">{
+                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'in transit').length, 0)
+                  }</h3>
                   <p className="text-muted mb-0">In Transit</p>
                 </Card.Body>
               </Card>
@@ -596,9 +525,7 @@ const Dashboard: React.FC = () => {
             <Col md={3}>
               <Card className="text-center">
                 <Card.Body>
-                  <h3 className="text-info">
-                    {packages.length}
-                  </h3>
+                  <h3 className="text-info">{filteredAndSortedGroupedPackages.length}</h3>
                   <p className="text-muted mb-0">Unique Clients</p>
                 </Card.Body>
               </Card>
@@ -609,13 +536,13 @@ const Dashboard: React.FC = () => {
           <Card>
             <Card.Body>
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="mb-0">Package List ({filteredAndSortedPackages.length})</h5>
+                <h5 className="mb-0">Package List ({filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)})</h5>
                 <small className="text-muted">
                   Sorted by {sortBy} ({sortOrder === 'asc' ? 'ascending' : 'descending'})
                 </small>
               </div>
 
-              {filteredAndSortedPackages.length === 0 ? (
+              {filteredAndSortedGroupedPackages.length === 0 ? (
                 <div className="text-center py-5">
                   <p className="text-muted">No packages found.</p>
                   <Button variant="primary" onClick={() => setShowAddModal(true)}>
