@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Container, Row, Col, Card, Button, Table, Form, Badge, Alert, Spinner } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
+
 import { Package } from '../types/package';
 import { ApiResponse } from '../types/common';
 import AddPackageModal from './AddPackageModal';
@@ -11,12 +12,22 @@ import DeleteCustomerModal from './DeleteCustomerModal';
 import axios from 'axios';
 import './Dashboard.css';
 
+// Type for grouped packages by client
+type GroupedPackages = {
+  _id: string;
+  packages: Package[];
+};
+
 const Dashboard: React.FC = () => {
   // ...existing useState declarations...
 
+  // ...existing useState declarations...
 
-  // State declarations
-  const [packages, setPackages] = useState<Array<{ _id: string; packages: Package[] }>>([]);
+  // ...existing useState declarations...
+
+  // Grouped filter/sort logic for table rendering
+  // (Moved below all useState declarations)
+  const [packages, setPackages] = useState<GroupedPackages[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [sortBy, setSortBy] = useState<'date' | 'client' | 'carrier' | 'status'>('date');
@@ -95,6 +106,53 @@ const Dashboard: React.FC = () => {
       deliveryDate?: string;
     }>;
   }>({ name: '', packages: [] });
+
+    // Grouped filter/sort logic for table rendering
+    const filteredAndSortedGroupedPackages = useMemo(() => {
+      if (!Array.isArray(packages)) return [];
+
+      // Filter groups by client name if needed
+      let groups = packages;
+      if (filterClient) {
+        groups = groups.filter(group =>
+          group._id && group._id.toLowerCase().includes(filterClient.toLowerCase())
+        );
+      }
+
+      // For each group, filter and sort its packages
+      return groups
+        .map(group => {
+          let pkgs: Package[] = group.packages || [];
+
+          // Filter by carrier
+          if (filterCarrier) {
+            pkgs = pkgs.filter((pkg: Package) =>
+              pkg.carrier && pkg.carrier.toLowerCase() === filterCarrier.toLowerCase()
+            );
+          }
+
+          // Sort packages
+          pkgs = pkgs.slice().sort((a: Package, b: Package) => {
+            let comparison = 0;
+            switch (sortBy) {
+              case 'date':
+                comparison = new Date(a.dateSent || a.createdAt || 0).getTime() - new Date(b.dateSent || b.createdAt || 0).getTime();
+                break;
+              case 'carrier':
+                comparison = (a.carrier || '').localeCompare(b.carrier || '');
+                break;
+              case 'status':
+                comparison = (a.status || '').localeCompare(b.status || '');
+                break;
+            }
+            return sortOrder === 'desc' ? -comparison : comparison;
+          });
+
+          return { ...group, packages: pkgs };
+        })
+        // Remove groups with no packages after filtering
+        .filter(group => group.packages && group.packages.length > 0);
+    }, [packages, filterClient, filterCarrier, sortBy, sortOrder]);
 
   // Moved out of useState
   const renderGroupedPackages = (groupedData: any[]): React.ReactNode => {
@@ -305,50 +363,6 @@ const Dashboard: React.FC = () => {
     return allPackages;
   };
 
-  const filteredAndSortedPackages = useMemo(() => {
-    // Get all individual packages from grouped data
-    const allPackages = getAllPackages(packages);
-    
-    let filtered = allPackages;
-
-    // Filter by client
-    if (filterClient) {
-      filtered = filtered.filter(pkg =>
-        pkg.customer && pkg.customer.toLowerCase().includes(filterClient.toLowerCase())
-      );
-    }
-
-    // Filter by carrier
-    if (filterCarrier) {
-      filtered = filtered.filter(pkg =>
-        pkg.carrier && pkg.carrier.toLowerCase() === filterCarrier.toLowerCase()
-      );
-    }
-
-    // Sort packages
-    filtered.sort((a, b) => {
-      let comparison = 0;
-
-      switch (sortBy) {
-        case 'date':
-          comparison = new Date(a.dateSent || a.createdAt || 0).getTime() - new Date(b.dateSent || b.createdAt || 0).getTime();
-          break;
-        case 'client':
-          comparison = (a.customer || '').localeCompare(b.customer || '');
-          break;
-        case 'carrier':
-          comparison = (a.carrier || '').localeCompare(b.carrier || '');
-          break;
-        case 'status':
-          comparison = (a.status || '').localeCompare(b.status || '');
-          break;
-      }
-
-      return sortOrder === 'desc' ? -comparison : comparison;
-    });
-
-    return filtered;
-  }, [packages, filterClient, filterCarrier, sortBy, sortOrder]);
 
   const getStatusBadgeVariant = (status: string): string => {
     switch (status.toLowerCase()) {
@@ -481,154 +495,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const renderGroupedPackages = () => {
-    if (!Array.isArray(packages) || packages.length === 0) {
-      return <tr><td colSpan={7}>No packages found</td></tr>;
-    }
-
-    return packages.map((group: any) => {
-      // Group packages by carrier within each client
-      const packagesByCarrier = (group.packages || []).reduce((acc: any, pkg: any) => {
-        const carrier = pkg.carrier || 'Unknown';
-        if (!acc[carrier]) {
-          acc[carrier] = [];
-        }
-        acc[carrier].push(pkg);
-        return acc;
-      }, {});
-
-      const carriers = Object.keys(packagesByCarrier);
-
-      return (
-        <React.Fragment key={group._id}>
-          <tr className="client-header-row">
-            <td colSpan={6} className="client-row bg-light">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="d-flex align-items-center">
-                  <Button 
-                    variant="outline-danger" 
-                    size="sm"
-                    className="me-2"
-                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
-                    title="Delete client and all packages"
-                  >
-                    ❌
-                  </Button>
-                  <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
-                </div>
-                <div className="customer-actions">
-                  {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
-                    <Button 
-                      variant="outline-success" 
-                      size="sm"
-                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
-                      title="View Proof of Delivery for all delivered packages"
-                    >
-                      📋 View All POD
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </td>
-            <td></td>
-          </tr>
-          {group.packages?.map((pkg: any, index: number) => (
-            <tr key={index}>
-              <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
-              <td>{group._id}</td>
-              <td className="d-flex flex-column align-items-start">
-                <div className="d-flex align-items-center">
-                  <button
-                    type="button"
-                    onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
-                    className="btn btn-link text-primary p-0 dashboard-track-btn"
-                    aria-label={`Track package ${pkg.trackingNumber}`}
-                  >
-                    {pkg.trackingNumber}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-link text-secondary p-0 ms-2"
-                    onClick={() => openEditPackage({
-                      ...pkg,
-                      customer: group._id
-                    })}
-                    title="Edit Package"
-                  >
-                    ✏️
-                  </button>
-                </div>
-              </td>
-              <td>
-                <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
-                  {pkg.carrier}
-                </Badge>
-              </td>
-              <td>
-                <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
-                  {pkg.status || 'Unknown'}
-                </Badge>
-              </td>
-              <td>
-                {index === 0 && (
-                  <div className="d-flex flex-column gap-1">
-                    {carriers.map(carrier => {
-                      const carrierPackages = packagesByCarrier[carrier];
-                      if (carrierPackages.length === 1) {
-                        return (
-                          <Button 
-                            key={carrier}
-                            variant="outline-primary" 
-                            size="sm"
-                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
-                          >
-                            Track {carrier}
-                          </Button>
-                        );
-                      } else {
-                        // Multiple packages for this carrier - create bulk tracking URL
-                        const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
-                        const bulkUrl = carrier.toLowerCase() === 'usps' 
-                          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
-                          : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
-                        
-                        return (
-                          <Button 
-                            key={carrier}
-                            variant="outline-primary" 
-                            size="sm"
-                            onClick={() => window.open(bulkUrl, '_blank')}
-                          >
-                            Track All {carrier} ({carrierPackages.length})
-                          </Button>
-                        );
-                      }
-                    })}
-                  </div>
-                )}
-                {/* Individual package actions */}
-                <div className="package-actions">
-                  {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
-                    <Button 
-                      variant="outline-warning" 
-                      size="sm"
-                      onClick={() => simulateDelivery({
-                        ...pkg,
-                        customer: group._id
-                      })}
-                      title="Simulate Delivery (for testing)"
-                    >
-                      🚚 Simulate
-                    </Button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </React.Fragment>
-      );
-    });
-  };
 
   if (loading) {
     return (
@@ -757,13 +623,13 @@ const Dashboard: React.FC = () => {
           <Card>
             <Card.Body>
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="mb-0">Package List ({filteredAndSortedPackages.length})</h5>
+                <h5 className="mb-0">Package List ({filteredAndSortedGroupedPackages.length})</h5>
                 <small className="text-muted">
                   Sorted by {sortBy} ({sortOrder === 'asc' ? 'ascending' : 'descending'})
                 </small>
               </div>
 
-              {filteredAndSortedPackages.length === 0 ? (
+              {filteredAndSortedGroupedPackages.length === 0 ? (
                 <div className="text-center py-5">
                   <p className="text-muted">No packages found.</p>
                   <Button variant="primary" onClick={() => setShowAddModal(true)}>
@@ -809,6 +675,7 @@ const Dashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
+                      {renderGroupedPackages(filteredAndSortedGroupedPackages)}
                       {renderGroupedPackages(filteredAndSortedGroupedPackages)}
                     </tbody>
                   </Table>
