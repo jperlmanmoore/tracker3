@@ -12,7 +12,11 @@ import axios from 'axios';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
-  const [packages, setPackages] = useState<Package[]>([]);
+  // ...existing useState declarations...
+
+
+  // State declarations
+  const [packages, setPackages] = useState<Array<{ _id: string; packages: Package[] }>>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [sortBy, setSortBy] = useState<'date' | 'client' | 'carrier' | 'status'>('date');
@@ -31,6 +35,53 @@ const Dashboard: React.FC = () => {
     carrier?: string;
   }>({});
   const [selectedPackageForEdit, setSelectedPackageForEdit] = useState<any>(null);
+
+  // Grouped filter/sort logic for table rendering
+  const filteredAndSortedGroupedPackages = useMemo(() => {
+    if (!Array.isArray(packages)) return [];
+
+    // Filter groups by client name if needed
+    let groups = packages;
+    if (filterClient) {
+      groups = groups.filter(group =>
+        group._id && group._id.toLowerCase().includes(filterClient.toLowerCase())
+      );
+    }
+
+    // For each group, filter and sort its packages
+    return groups
+      .map(group => {
+        let pkgs = group.packages || [];
+
+        // Filter by carrier
+        if (filterCarrier) {
+          pkgs = pkgs.filter(pkg =>
+            pkg.carrier && pkg.carrier.toLowerCase() === filterCarrier.toLowerCase()
+          );
+        }
+
+        // Sort packages
+        pkgs = pkgs.slice().sort((a, b) => {
+          let comparison = 0;
+          switch (sortBy) {
+            case 'date':
+              comparison = new Date(a.dateSent || a.createdAt || 0).getTime() - new Date(b.dateSent || b.createdAt || 0).getTime();
+              break;
+            case 'carrier':
+              comparison = (a.carrier || '').localeCompare(b.carrier || '');
+              break;
+            case 'status':
+              comparison = (a.status || '').localeCompare(b.status || '');
+              break;
+          }
+          return sortOrder === 'desc' ? -comparison : comparison;
+        });
+
+        return { ...group, packages: pkgs };
+      })
+      // Remove groups with no packages after filtering
+      .filter(group => group.packages && group.packages.length > 0);
+  }, [packages, filterClient, filterCarrier, sortBy, sortOrder]);
   const [selectedCustomerForDelete, setSelectedCustomerForDelete] = useState<{
     name: string;
     packageCount: number;
@@ -44,6 +95,156 @@ const Dashboard: React.FC = () => {
       deliveryDate?: string;
     }>;
   }>({ name: '', packages: [] });
+
+  // Moved out of useState
+  const renderGroupedPackages = (groupedData: any[]): React.ReactNode => {
+    const data = Array.isArray(groupedData) ? groupedData : [];
+    if (data.length === 0) {
+      return <tr><td colSpan={7}>No packages found</td></tr>;
+    }
+    return data.map((group: any) => {
+      // Group packages by carrier within each client
+      const packagesByCarrier = (group.packages || []).reduce((acc: any, pkg: any) => {
+        const carrier = pkg.carrier || 'Unknown';
+        if (!acc[carrier]) {
+          acc[carrier] = [];
+        }
+        acc[carrier].push(pkg);
+        return acc;
+      }, {});
+
+      const carriers = Object.keys(packagesByCarrier);
+
+      return (
+        <React.Fragment key={group._id}>
+          <tr className="client-header-row">
+            <td colSpan={6} className="client-row bg-light">
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="d-flex align-items-center">
+                  <Button 
+                    variant="outline-danger" 
+                    size="sm"
+                    className="me-2"
+                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
+                    title="Delete client and all packages"
+                  >
+                    ❌
+                  </Button>
+                  <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
+                </div>
+                <div className="customer-actions">
+                  {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
+                    <Button 
+                      variant="outline-success" 
+                      size="sm"
+                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
+                      title="View Proof of Delivery for all delivered packages"
+                    >
+                      📋 View All POD
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td></td>
+          </tr>
+          {group.packages?.map((pkg: any, index: number) => (
+            <tr key={index}>
+              <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
+              <td>{group._id}</td>
+              <td className="d-flex flex-column align-items-start">
+                <div className="d-flex align-items-center">
+                  <button
+                    type="button"
+                    onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
+                    className="btn btn-link text-primary p-0 dashboard-track-btn"
+                    aria-label={`Track package ${pkg.trackingNumber}`}
+                  >
+                    {pkg.trackingNumber}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-link text-secondary p-0 ms-2"
+                    onClick={() => openEditPackage({
+                      ...pkg,
+                      customer: group._id
+                    })}
+                    title="Edit Package"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              </td>
+              <td>
+                <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
+                  {pkg.carrier}
+                </Badge>
+              </td>
+              <td>
+                <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
+                  {pkg.status || 'Unknown'}
+                </Badge>
+              </td>
+              <td>
+                {index === 0 && (
+                  <div className="d-flex flex-column gap-1">
+                    {carriers.map(carrier => {
+                      const carrierPackages = packagesByCarrier[carrier];
+                      if (carrierPackages.length === 1) {
+                        return (
+                          <Button 
+                            key={carrier}
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
+                          >
+                            Track {carrier}
+                          </Button>
+                        );
+                      } else {
+                        // Multiple packages for this carrier - create bulk tracking URL
+                        const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
+                        const bulkUrl = carrier.toLowerCase() === 'usps' 
+                          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
+                          : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
+                        
+                        return (
+                          <Button 
+                            key={carrier}
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => window.open(bulkUrl, '_blank')}
+                          >
+                            Track All {carrier} ({carrierPackages.length})
+                          </Button>
+                        );
+                      }
+                    })}
+                  </div>
+                )}
+                {/* Individual package actions */}
+                <div className="package-actions">
+                  {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
+                    <Button 
+                      variant="outline-warning" 
+                      size="sm"
+                      onClick={() => simulateDelivery({
+                        ...pkg,
+                        customer: group._id
+                      })}
+                      title="Simulate Delivery (for testing)"
+                    >
+                      🚚 Simulate
+                    </Button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </React.Fragment>
+      );
+    });
+  };
 
   const { user, logout } = useAuth();
 
@@ -270,109 +471,160 @@ const Dashboard: React.FC = () => {
       return <tr><td colSpan={7}>No packages found</td></tr>;
     }
 
-    return packages.map((group: any) => (
-      <React.Fragment key={group._id}>
-        <tr className="client-header-row">
-          <td colSpan={7} className="client-row bg-light">
-            <div className="d-flex justify-content-between align-items-center">
-              <div>
-                <strong>📁 {group._id}</strong> ({group.packages?.length || 0} packages)
-              </div>
-              <div className="customer-actions">
-                {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
+    return packages.map((group: any) => {
+      // Group packages by carrier within each client
+      const packagesByCarrier = (group.packages || []).reduce((acc: any, pkg: any) => {
+        const carrier = pkg.carrier || 'Unknown';
+        if (!acc[carrier]) {
+          acc[carrier] = [];
+        }
+        acc[carrier].push(pkg);
+        return acc;
+      }, {});
+
+      const carriers = Object.keys(packagesByCarrier);
+
+      return (
+        <React.Fragment key={group._id}>
+          <tr className="client-header-row">
+            <td colSpan={6} className="client-row bg-light">
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="d-flex align-items-center">
                   <Button 
-                    variant="outline-success" 
+                    variant="outline-danger" 
                     size="sm"
-                    onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
-                    title="View Proof of Delivery for all delivered packages"
+                    className="me-2"
+                    onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
+                    title="Delete client and all packages"
                   >
-                    📋 View All POD
+                    ❌
                   </Button>
-                )}
-                <Button 
-                  variant="outline-danger" 
-                  size="sm"
-                  onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
-                  title="Delete customer and all packages"
-                >
-                  🗑️ Delete Customer
-                </Button>
+                  <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
+                </div>
+                <div className="customer-actions">
+                  {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
+                    <Button 
+                      variant="outline-success" 
+                      size="sm"
+                      onClick={() => openBulkProofOfDelivery(group._id, group.packages)}
+                      title="View Proof of Delivery for all delivered packages"
+                    >
+                      📋 View All POD
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          </td>
-        </tr>
-        {group.packages?.map((pkg: any, index: number) => (
-          <tr key={index}>
-            <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
-            <td>{group._id}</td>
-            <td>
-              <div className="d-flex align-items-center gap-2">
-                <a 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    openTrackingUrl(pkg.trackingNumber, pkg.carrier);
-                  }}
-                  className="text-primary"
+            </td>
+            <td></td>
+          </tr>
+          {group.packages?.map((pkg: any, index: number) => (
+            <tr key={index}>
+              <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
+              <td>{group._id}</td>
+              <td>
+                <button
+                  type="button"
+                  onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
+                  className="btn btn-link text-primary p-0 dashboard-track-btn"
+                  aria-label={`Track package ${pkg.trackingNumber}`}
                 >
                   {pkg.trackingNumber}
-                </a>
-                <Button 
-                  variant="outline-secondary" 
-                  size="sm"
-                  onClick={() => openEditPackage({
-                    ...pkg,
-                    customer: group._id
-                  })}
-                  title="Edit Package"
-                >
-                  ✏️ Edit
-                </Button>
-                {pkg.status && pkg.status.toLowerCase() === 'delivered' && (
+                </button>
+              </td>
+              <td>
+                <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
+                  {pkg.carrier}
+                </Badge>
+              </td>
+              <td>
+                <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
+                  {pkg.status || 'Unknown'}
+                </Badge>
+              </td>
+              <td>{pkg.notes || '-'}</td>
+              <td>
+                {index === 0 && (
+                  <div className="d-flex flex-column gap-1">
+                    {carriers.map(carrier => {
+                      const carrierPackages = packagesByCarrier[carrier];
+                      if (carrierPackages.length === 1) {
+                        return (
+                          <Button 
+                            key={carrier}
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
+                          >
+                            Track {carrier}
+                          </Button>
+                        );
+                      } else {
+                        // Multiple packages for this carrier - create bulk tracking URL
+                        const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
+                        const bulkUrl = carrier.toLowerCase() === 'usps' 
+                          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
+                          : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
+                        
+                        return (
+                          <Button 
+                            key={carrier}
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => window.open(bulkUrl, '_blank')}
+                          >
+                            Track All {carrier} ({carrierPackages.length})
+                          </Button>
+                        );
+                      }
+                    })}
+                  </div>
+                )}
+                {/* Individual package actions */}
+                <div className="package-actions">
                   <Button 
-                    variant="outline-success" 
+                    variant="outline-secondary" 
                     size="sm"
-                    onClick={() => openProofOfDelivery({
+                    onClick={() => openEditPackage({
                       ...pkg,
                       customer: group._id
                     })}
-                    title="View Proof of Delivery"
+                    title="Edit Package"
                   >
-                    📋 POD
+                    ✏️ Edit
                   </Button>
-                )}
-              </div>
-            </td>
-            <td>
-              <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
-                {pkg.carrier}
-              </Badge>
-            </td>
-            <td>
-              <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
-                {pkg.status || 'Unknown'}
-              </Badge>
-            </td>
-            <td>{pkg.notes || '-'}</td>
-            <td>
-              {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
-                <Button 
-                  variant="outline-warning" 
-                  size="sm"
-                  onClick={() => simulateDelivery({
-                    ...pkg,
-                    customer: group._id
-                  })}
-                  title="Simulate Delivery (for testing)"
-                >
-                  🚚 Simulate
-                </Button>
-              )}
-            </td>
-          </tr>
-        ))}
-      </React.Fragment>
-    ));
+                  {pkg.status && pkg.status.toLowerCase() === 'delivered' && (
+                    <Button 
+                      variant="outline-success" 
+                      size="sm"
+                      onClick={() => openProofOfDelivery({
+                        ...pkg,
+                        customer: group._id
+                      })}
+                      title="View Proof of Delivery"
+                    >
+                      📋 POD
+                    </Button>
+                  )}
+                  {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
+                    <Button 
+                      variant="outline-warning" 
+                      size="sm"
+                      onClick={() => simulateDelivery({
+                        ...pkg,
+                        customer: group._id
+                      })}
+                      title="Simulate Delivery (for testing)"
+                    >
+                      🚚 Simulate
+                    </Button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </React.Fragment>
+      );
+    });
   };
 
   if (loading) {
@@ -409,6 +661,52 @@ const Dashboard: React.FC = () => {
           </div>
 
           {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
+
+          {/* Filters */}
+          <Card className="mb-4">
+            <Card.Body>
+              <Row>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label>Filter by Client</Form.Label>
+                    <Form.Control
+                      type="text"
+                      placeholder="Enter client name..."
+                      value={filterClient}
+                      onChange={(e) => setFilterClient(e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label>Filter by Carrier</Form.Label>
+                    <label htmlFor="filter-select">Filter Options</label>
+                    <Form.Select
+                      id="filter-select"
+                      value={filterCarrier}
+                      onChange={(e) => setFilterCarrier(e.target.value)}
+                      aria-label="Filter by carrier"
+                    >
+                      <option value="">All Carriers</option>
+                      <option value="usps">USPS</option>
+                      <option value="fedex">FedEx</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={4} className="d-flex align-items-end">
+                  <Button 
+                    variant="outline-secondary" 
+                    onClick={() => {
+                      setFilterClient('');
+                      setFilterCarrier('');
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                </Col>
+              </Row>
+            </Card.Body>
+          </Card>
 
           {/* Statistics */}
           <Row className="mb-4">
@@ -474,71 +772,82 @@ const Dashboard: React.FC = () => {
                   <Table hover>
                     <thead>
                       <tr>
-                        <th className="sortable-header" onClick={() => handleSort('date')}>
+                        <th 
+                          className="sortable-header"
+                          onClick={() => handleSort('date')}
+                        >
                           Date Added {sortBy === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th className="sortable-header" onClick={() => handleSort('client')}>
+                        <th 
+                          className="sortable-header"
+                          onClick={() => handleSort('client')}
+                        >
                           Client {sortBy === 'client' && (sortOrder === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th>Tracking Number & Actions</th>
-                        <th className="sortable-header" onClick={() => handleSort('carrier')}>
+                        <th>Tracking Number</th>
+                        <th 
+                          className="sortable-header"
+                          onClick={() => handleSort('carrier')}
+                        >
                           Carrier {sortBy === 'carrier' && (sortOrder === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th className="sortable-header" onClick={() => handleSort('status')}>
+                        <th 
+                          className="sortable-header"
+                          onClick={() => handleSort('status')}
+                        >
                           Status {sortBy === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
                         </th>
                         <th>Description</th>
-                        <th>Simulate</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {renderGroupedPackages()}
+                      {renderGroupedPackages(filteredAndSortedGroupedPackages)}
                     </tbody>
                   </Table>
                 </div>
               )}
             </Card.Body>
           </Card>
-
-          {/* Modals */}
-          <AddPackageModal
-            show={showAddModal}
-            onHide={() => setShowAddModal(false)}
-            onPackageAdded={fetchGroupedPackages}
-          />
-
-          <ProofOfDeliveryModal
-            show={showProofModal}
-            onHide={() => setShowProofModal(false)}
-            packageId={selectedPackage.id}
-            trackingNumber={selectedPackage.trackingNumber}
-            customer={selectedPackage.customer}
-            carrier={selectedPackage.carrier}
-          />
-
-          <BulkProofOfDeliveryModal
-            show={showBulkProofModal}
-            onHide={() => setShowBulkProofModal(false)}
-            customer={selectedCustomer.name}
-            packages={selectedCustomer.packages}
-          />
-
-          <EditPackageModal
-            show={showEditModal}
-            onHide={() => setShowEditModal(false)}
-            package={selectedPackageForEdit}
-            onPackageUpdated={fetchGroupedPackages}
-          />
-
-          <DeleteCustomerModal
-            show={showDeleteCustomerModal}
-            onHide={() => setShowDeleteCustomerModal(false)}
-            customerName={selectedCustomerForDelete.name}
-            packageCount={selectedCustomerForDelete.packageCount}
-            onCustomerDeleted={fetchGroupedPackages}
-          />
         </Col>
       </Row>
+
+      <AddPackageModal
+        show={showAddModal}
+        onHide={() => setShowAddModal(false)}
+        onPackageAdded={fetchGroupedPackages}
+      />
+
+      <ProofOfDeliveryModal
+        show={showProofModal}
+        onHide={() => setShowProofModal(false)}
+        packageId={selectedPackage.id}
+        trackingNumber={selectedPackage.trackingNumber}
+        customer={selectedPackage.customer}
+        carrier={selectedPackage.carrier}
+      />
+
+      <BulkProofOfDeliveryModal
+        show={showBulkProofModal}
+        onHide={() => setShowBulkProofModal(false)}
+        customer={selectedCustomer.name}
+        packages={selectedCustomer.packages}
+      />
+
+      <EditPackageModal
+        show={showEditModal}
+        onHide={() => setShowEditModal(false)}
+        package={selectedPackageForEdit}
+        onPackageUpdated={fetchGroupedPackages}
+      />
+
+      <DeleteCustomerModal
+        show={showDeleteCustomerModal}
+        onHide={() => setShowDeleteCustomerModal(false)}
+        customerName={selectedCustomerForDelete.name}
+        packageCount={selectedCustomerForDelete.packageCount}
+        onCustomerDeleted={fetchGroupedPackages}
+      />
     </Container>
   );
 };
