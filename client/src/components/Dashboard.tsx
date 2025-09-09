@@ -134,7 +134,7 @@ const Dashboard: React.FC = () => {
                   </OverlayTrigger>
                   <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
                 </div>
-                <div className="customer-actions">
+                <div className="customer-actions d-flex gap-2">
                   {group.packages?.some((pkg: any) => pkg.status && pkg.status.toLowerCase() === 'delivered') && (
                     <OverlayTrigger placement="top" overlay={<Tooltip>View Proof of Delivery for All Delivered Packages</Tooltip>}>
                       <Button 
@@ -149,6 +149,44 @@ const Dashboard: React.FC = () => {
                       </Button>
                     </OverlayTrigger>
                   )}
+                  {carriers.map(carrier => {
+                    const carrierPackages = packagesByCarrier[carrier];
+                    if (carrierPackages.length === 1) {
+                      return (
+                        <OverlayTrigger key={carrier} placement="top" overlay={<Tooltip>Track {carrier} Package</Tooltip>}>
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            className="d-flex align-items-center gap-1"
+                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
+                          >
+                            {FaSearch({size: 12})}
+                            Track {carrier}
+                          </Button>
+                        </OverlayTrigger>
+                      );
+                    } else {
+                      // Multiple packages for this carrier - create bulk tracking URL
+                      const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
+                      const bulkUrl = carrier.toLowerCase() === 'usps' 
+                        ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
+                        : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
+                      
+                      return (
+                        <OverlayTrigger key={carrier} placement="top" overlay={<Tooltip>Track All {carrier} Packages</Tooltip>}>
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            className="d-flex align-items-center gap-1"
+                            onClick={() => window.open(bulkUrl, '_blank')}
+                          >
+                            {FaSearch({size: 12})}
+                            Track All {carrier} ({carrierPackages.length})
+                          </Button>
+                        </OverlayTrigger>
+                      );
+                    }
+                  })}
                 </div>
               </div>
             </td>
@@ -208,48 +246,6 @@ const Dashboard: React.FC = () => {
                 </Badge>
               </td>
               <td>
-                {index === 0 && (
-                  <div className="d-flex flex-column gap-1">
-                    {carriers.map(carrier => {
-                      const carrierPackages = packagesByCarrier[carrier];
-                      if (carrierPackages.length === 1) {
-                        return (
-                          <OverlayTrigger key={carrier} placement="top" overlay={<Tooltip>Track {carrier} Package</Tooltip>}>
-                            <Button 
-                              variant="outline-primary" 
-                              size="sm"
-                              className="d-flex align-items-center gap-1"
-                              onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
-                            >
-                              {FaSearch({size: 12})}
-                              Track {carrier}
-                            </Button>
-                          </OverlayTrigger>
-                        );
-                      } else {
-                        // Multiple packages for this carrier - create bulk tracking URL
-                        const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
-                        const bulkUrl = carrier.toLowerCase() === 'usps' 
-                          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
-                          : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
-                        
-                        return (
-                          <OverlayTrigger key={carrier} placement="top" overlay={<Tooltip>Track All {carrier} Packages</Tooltip>}>
-                            <Button 
-                              variant="outline-primary" 
-                              size="sm"
-                              className="d-flex align-items-center gap-1"
-                              onClick={() => window.open(bulkUrl, '_blank')}
-                            >
-                              {FaSearch({size: 12})}
-                              Track All {carrier} ({carrierPackages.length})
-                            </Button>
-                          </OverlayTrigger>
-                        );
-                      }
-                    })}
-                  </div>
-                )}
                 {/* Individual package actions */}
                 <div className="package-actions">
                   {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
