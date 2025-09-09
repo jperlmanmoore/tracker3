@@ -54,12 +54,18 @@
 	- Server dist/ directory created with compiled JavaScript
 	-->
 
-- [ ] Create and Run Task
+- [x] Create and Run Task
 	<!--
 	Verify that all previous steps has been completed.
 	Check https://code.visualstudio.com/docs/debugtest/tasks to determine if the project needs a task. If so, use the create_and_run_task to create and launch a task based on package.json, README.md, and project structure.
 	Skip this step otherwise.
 	 -->
+	<!-- Development task already configured:
+	- Task "Start Development Servers" runs "npm run dev"
+	- Uses concurrently to run server (port 5000) and client (port 3000)
+	- Proper monorepo setup with workspaces
+	- All scripts properly configured in package.json files
+	-->
 
 - [x] Launch the Project
 	<!-- Project launched successfully:

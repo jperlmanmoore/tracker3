@@ -3,8 +3,48 @@ import Package from '../models/Package';
 import { authenticateToken } from '../middleware/auth';
 import { ApiResponse } from '../types/common';
 import { detectCarrier, getTrackingUrl, getBulkTrackingUrl, parseTrackingNumbers, simulateDelivery } from '../utils/trackingUtils';
+import { sendPodEmailsToMultipleRecipients } from '../utils/emailService';
+import User from '../models/User';
 
 const router: Router = express.Router();
+
+// Helper function to send POD emails if configured
+const sendPodEmailsIfConfigured = async (pkg: any, userId: string): Promise<void> => {
+  try {
+    // Get user's POD email configuration
+    const user = await User.findById(userId);
+    if (!user?.podEmailConfig?.enabled) {
+      return; // POD emails not enabled for this user
+    }
+
+    const { email1, email2 } = user.podEmailConfig;
+    const emailsToSend: string[] = [];
+
+    if (email1) emailsToSend.push(email1);
+    if (email2) emailsToSend.push(email2);
+
+    if (emailsToSend.length === 0) {
+      return; // No email addresses configured
+    }
+
+    // Prepare POD email data
+    const podEmailData = {
+      trackingNumber: pkg.trackingNumber,
+      customer: pkg.customer,
+      carrier: pkg.carrier,
+      deliveryDate: pkg.deliveryDate,
+      proofOfDelivery: pkg.proofOfDelivery
+    };
+
+    // Send emails
+    const results = await sendPodEmailsToMultipleRecipients(emailsToSend, podEmailData);
+
+    console.log(`POD emails sent for ${pkg.trackingNumber}:`, results);
+  } catch (error) {
+    console.error('Error sending POD emails:', error);
+    // Don't throw error - we don't want email failures to break the main functionality
+  }
+};
 
 // Get all packages for authenticated user
 router.get('/', authenticateToken, async (req: Request, res: Response): Promise<void> => {
@@ -643,7 +683,7 @@ router.post('/:id/simulate-delivery', authenticateToken, async (req: Request, re
     }
 
     // Simulate delivery
-    const deliveryData = simulateDelivery(pkg.trackingNumber, pkg.carrier);
+    const deliveryData = await simulateDelivery(pkg.trackingNumber, pkg.carrier);
     
     pkg.status = deliveryData.status;
     pkg.deliveryDate = deliveryData.deliveryDate;
@@ -657,6 +697,9 @@ router.post('/:id/simulate-delivery', authenticateToken, async (req: Request, re
     });
 
     await pkg.save();
+
+    // Send POD emails if configured
+    await sendPodEmailsIfConfigured(pkg, userId);
 
     res.json({
       success: true,

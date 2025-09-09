@@ -7,9 +7,9 @@ const express_1 = __importDefault(require("express"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const User_1 = __importDefault(require("../models/User"));
-const validation_js_1 = require("../middleware/validation.js");
+const validation_1 = require("../middleware/validation");
 const router = express_1.default.Router();
-router.post('/register', validation_js_1.validateRegistration, async (req, res) => {
+router.post('/register', validation_1.validateRegistration, async (req, res) => {
     try {
         const { username, email, password, firstName, lastName } = req.body;
         const existingUser = await User_1.default.findOne({
@@ -59,7 +59,7 @@ router.post('/register', validation_js_1.validateRegistration, async (req, res) 
         });
     }
 });
-router.post('/login', validation_js_1.validateLogin, async (req, res) => {
+router.post('/login', validation_1.validateLogin, async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await User_1.default.findOne({ email });

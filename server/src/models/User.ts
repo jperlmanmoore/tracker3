@@ -1,6 +1,27 @@
 import mongoose, { Schema, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
-import { IUser } from '../types/user';
+import { IUser, IPodEmailConfig } from '../types/user';
+
+const PodEmailConfigSchema = new Schema<IPodEmailConfig>({
+  email1: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address for email1'],
+    default: undefined
+  },
+  email2: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address for email2'],
+    default: undefined
+  },
+  enabled: {
+    type: Boolean,
+    default: false
+  }
+}, { _id: false });
 
 const UserSchema = new Schema<IUser>({
   username: {
@@ -42,6 +63,10 @@ const UserSchema = new Schema<IUser>({
   emailNotifications: {
     type: Boolean,
     default: true
+  },
+  podEmailConfig: {
+    type: PodEmailConfigSchema,
+    default: () => ({ enabled: false })
   },
   isActive: {
     type: Boolean,

@@ -8,8 +8,9 @@ import ProofOfDeliveryModal from './ProofOfDeliveryModal';
 import BulkProofOfDeliveryModal from './BulkProofOfDeliveryModal';
 import EditPackageModal from './EditPackageModal';
 import DeleteCustomerModal from './DeleteCustomerModal';
+import UserSettings from './UserSettings';
 import axios from 'axios';
-import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaTruck, FaSearch, FaFilter, FaSortUp, FaSortDown } from 'react-icons/fa';
+import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaTruck, FaSearch, FaFilter, FaSortUp, FaSortDown, FaCog } from 'react-icons/fa';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -29,6 +30,7 @@ const Dashboard: React.FC = () => {
   const [showBulkProofModal, setShowBulkProofModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showDeleteCustomerModal, setShowDeleteCustomerModal] = useState<boolean>(false);
+  const [showUserSettings, setShowUserSettings] = useState<boolean>(false);
   const [selectedPackage, setSelectedPackage] = useState<{
     id?: string;
     trackingNumber?: string;
@@ -444,7 +446,9 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  return (
+  return showUserSettings ? (
+    <UserSettings onBack={() => setShowUserSettings(false)} />
+  ) : (
     <Container fluid className="py-1 fade-in">
       <Row>
         <Col>
@@ -454,6 +458,16 @@ const Dashboard: React.FC = () => {
               <p className="text-muted mb-0">Welcome back, {user?.firstName || user?.username}!</p>
             </div>
             <div className="d-flex gap-2">
+              <OverlayTrigger placement="bottom" overlay={<Tooltip>User Settings</Tooltip>}>
+                <Button 
+                  variant="outline-info" 
+                  className="d-flex align-items-center gap-2"
+                  onClick={() => setShowUserSettings(true)}
+                >
+                  {FaCog({size: 14})}
+                  Settings
+                </Button>
+              </OverlayTrigger>
               <OverlayTrigger placement="bottom" overlay={<Tooltip>Add New Package</Tooltip>}>
                 <Button 
                   variant="primary" 

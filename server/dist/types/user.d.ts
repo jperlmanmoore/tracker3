@@ -10,6 +10,11 @@ export interface IUserLogin {
     email: string;
     password: string;
 }
+export interface IPodEmailConfig {
+    email1?: string;
+    email2?: string;
+    enabled: boolean;
+}
 export interface IUserResponse {
     id: string;
     username: string;
@@ -17,6 +22,7 @@ export interface IUserResponse {
     firstName: string;
     lastName: string;
     emailNotifications?: boolean;
+    podEmailConfig?: IPodEmailConfig;
     isActive?: boolean;
     createdAt?: Date;
     updatedAt?: Date;
@@ -28,6 +34,7 @@ export interface IUser extends Document {
     firstName: string;
     lastName: string;
     emailNotifications: boolean;
+    podEmailConfig?: IPodEmailConfig;
     isActive: boolean;
     resetPasswordToken?: string | null;
     resetPasswordExpires?: Date | null;
