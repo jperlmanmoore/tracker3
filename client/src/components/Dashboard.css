@@ -40,17 +40,28 @@ body {
   color: var(--primary-color);
 }
 
-/* Tracking Number Styling */
-.tracking-number {
+/* Delete Client Button */
+.delete-client-btn {
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--danger-color);
   cursor: pointer;
-  text-decoration: none;
   transition: var(--transition);
-  color: var(--primary-color);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
 }
 
-.tracking-number:hover {
-  text-decoration: underline;
-  color: var(--primary-color);
+.delete-client-btn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
+  transform: scale(1.1);
 }
 
 /* Client Header Row */

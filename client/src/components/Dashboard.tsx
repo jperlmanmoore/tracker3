@@ -123,16 +123,14 @@ const Dashboard: React.FC = () => {
               <div className="d-flex justify-content-between align-items-center">
                 <div className="d-flex align-items-center">
                   <OverlayTrigger placement="top" overlay={<Tooltip>Delete Client and All Packages</Tooltip>}>
-                    <Button 
-                      variant="outline-danger" 
-                      size="sm"
-                      className="me-2 d-flex align-items-center gap-1"
+                    <button
+                      type="button"
+                      className="btn btn-link text-danger p-0 me-2 delete-client-btn"
                       onClick={() => openDeleteCustomer(group._id, group.packages?.length || 0)}
                       title="Delete client and all packages"
                     >
-                      {FaTrash({size: 12})}
-                      Delete
-                    </Button>
+                      ×
+                    </button>
                   </OverlayTrigger>
                   <strong>{group._id}</strong> ({group.packages?.length || 0} packages)
                 </div>
