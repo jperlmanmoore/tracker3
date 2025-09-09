@@ -119,7 +119,7 @@ const Dashboard: React.FC = () => {
       return (
         <React.Fragment key={group._id}>
           <tr className="client-header-row">
-            <td colSpan={6} className="client-row bg-light">
+            <td colSpan={6} className="client-row bg-light py-2">
               <div className="d-flex justify-content-between align-items-center">
                 <div className="d-flex align-items-center">
                   <OverlayTrigger placement="top" overlay={<Tooltip>Delete Client and All Packages</Tooltip>}>
@@ -193,59 +193,61 @@ const Dashboard: React.FC = () => {
           </tr>
           {group.packages?.map((pkg: any, index: number) => (
             <tr key={index}>
-              <td>{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
-              <td>{group._id}</td>
-              <td className="d-flex align-items-center">
-                <div className="d-flex align-items-center gap-2">
-                  <OverlayTrigger placement="top" overlay={<Tooltip>Track Package</Tooltip>}>
-                    <button
-                      type="button"
-                      onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
-                      className="btn btn-link text-primary p-0 dashboard-track-btn"
-                      aria-label={`Track package ${pkg.trackingNumber}`}
-                    >
-                      {FaSearch({size: 14, className: "me-1"})}
-                      {pkg.trackingNumber}
-                    </button>
-                  </OverlayTrigger>
-                  <div className="d-flex gap-1">
-                    <OverlayTrigger placement="top" overlay={<Tooltip>Edit Package</Tooltip>}>
-                      <button
-                        type="button"
-                        className="btn btn-link text-secondary p-0"
-                        onClick={() => openEditPackage({
-                          ...pkg,
-                          customer: group._id
-                        })}
-                        title="Edit Package"
-                      >
-                        {FaEdit({size: 12})}
-                      </button>
-                    </OverlayTrigger>
-                    <OverlayTrigger placement="top" overlay={<Tooltip>Delete Package</Tooltip>}>
-                      <button
-                        type="button"
-                        className="btn btn-link text-danger p-0"
-                        onClick={() => deletePackage(pkg._id)}
-                        title="Delete Package"
-                      >
-                        {FaTrash({size: 12})}
-                      </button>
-                    </OverlayTrigger>
-                  </div>
-                </div>
-              </td>
-              <td>
+              <td className="py-2">{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
+              <td className="py-2">{group._id}</td>
+              <td className="py-2 px-1">
                 <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
                   {pkg.carrier}
                 </Badge>
               </td>
-              <td>
+              <td className="py-2">
                 <Badge bg={getStatusBadgeVariant(pkg.status || '')}>
                   {pkg.status || 'Unknown'}
                 </Badge>
               </td>
-              <td>
+              <td className="py-2 px-1">
+                <div className="d-flex align-items-center">
+                  <div className="d-flex align-items-center gap-2">
+                    <OverlayTrigger placement="top" overlay={<Tooltip>Track Package</Tooltip>}>
+                      <button
+                        type="button"
+                        onClick={() => openTrackingUrl(pkg.trackingNumber, pkg.carrier)}
+                        className="btn btn-link text-primary p-0 dashboard-track-btn"
+                        aria-label={`Track package ${pkg.trackingNumber}`}
+                      >
+                        {FaSearch({size: 14, className: "me-1"})}
+                        {pkg.trackingNumber}
+                      </button>
+                    </OverlayTrigger>
+                    <div className="d-flex gap-1">
+                      <OverlayTrigger placement="top" overlay={<Tooltip>Edit Package</Tooltip>}>
+                        <button
+                          type="button"
+                          className="btn btn-link text-secondary p-0"
+                          onClick={() => openEditPackage({
+                            ...pkg,
+                            customer: group._id
+                          })}
+                          title="Edit Package"
+                        >
+                          {FaEdit({size: 12})}
+                        </button>
+                      </OverlayTrigger>
+                      <OverlayTrigger placement="top" overlay={<Tooltip>Delete Package</Tooltip>}>
+                        <button
+                          type="button"
+                          className="btn btn-link text-danger p-0"
+                          onClick={() => deletePackage(pkg._id)}
+                          title="Delete Package"
+                        >
+                          {FaTrash({size: 12})}
+                        </button>
+                      </OverlayTrigger>
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td className="py-2">
                 {/* Individual package actions */}
                 <div className="package-actions">
                   {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
@@ -443,12 +445,12 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <Container fluid className="py-4 fade-in">
+    <Container fluid className="py-1 fade-in">
       <Row>
         <Col>
-          <div className="d-flex justify-content-between align-items-center mb-4">
+          <div className="d-flex justify-content-between align-items-center mb-2">
             <div>
-              <h1 className="text-primary mb-3">📦 Package Dashboard</h1>
+              <h1 className="text-primary mb-1">📦 Package Dashboard</h1>
               <p className="text-muted mb-0">Welcome back, {user?.firstName || user?.username}!</p>
             </div>
             <div className="d-flex gap-2">
@@ -471,11 +473,11 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
+          {error && <Alert variant="danger" dismissible onClose={() => setError('')} className="mb-2">{error}</Alert>}
 
           {/* Filters */}
-          <Card className="mb-4">
-            <Card.Body>
+          <Card className="mb-2">
+            <Card.Body className="py-2">
               <Row>
                 <Col md={4}>
                   <Form.Group>
@@ -524,42 +526,42 @@ const Dashboard: React.FC = () => {
           </Card>
 
           {/* Statistics */}
-          <Row className="mb-4">
+          <Row className="mb-2">
             <Col md={3}>
               <Card className="text-center">
-                <Card.Body>
-                  <h3 className="text-primary">{
+                <Card.Body className="py-2">
+                  <h3 className="text-primary mb-0 fs-5">{
                     filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)
                   }</h3>
-                  <p className="text-muted mb-0">Total Packages</p>
+                  <p className="text-muted mb-0 small">Total Packages</p>
                 </Card.Body>
               </Card>
             </Col>
             <Col md={3}>
               <Card className="text-center">
-                <Card.Body>
-                  <h3 className="text-success">{
+                <Card.Body className="py-2">
+                  <h3 className="text-success mb-0 fs-5">{
                     filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'delivered').length, 0)
                   }</h3>
-                  <p className="text-muted mb-0">Delivered</p>
+                  <p className="text-muted mb-0 small">Delivered</p>
                 </Card.Body>
               </Card>
             </Col>
             <Col md={3}>
               <Card className="text-center">
-                <Card.Body>
-                  <h3 className="text-warning">{
+                <Card.Body className="py-2">
+                  <h3 className="text-warning mb-0 fs-5">{
                     filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'in transit').length, 0)
                   }</h3>
-                  <p className="text-muted mb-0">In Transit</p>
+                  <p className="text-muted mb-0 small">In Transit</p>
                 </Card.Body>
               </Card>
             </Col>
             <Col md={3}>
               <Card className="text-center">
-                <Card.Body>
-                  <h3 className="text-info">{filteredAndSortedGroupedPackages.length}</h3>
-                  <p className="text-muted mb-0">Unique Clients</p>
+                <Card.Body className="py-2">
+                  <h3 className="text-info mb-0 fs-5">{filteredAndSortedGroupedPackages.length}</h3>
+                  <p className="text-muted mb-0 small">Unique Clients</p>
                 </Card.Body>
               </Card>
             </Col>
@@ -567,8 +569,8 @@ const Dashboard: React.FC = () => {
 
           {/* Packages Table */}
           <Card>
-            <Card.Body>
-              <div className="d-flex justify-content-between align-items-center mb-3">
+            <Card.Body className="py-2">
+              <div className="d-flex justify-content-between align-items-center mb-1">
                 <h5 className="mb-0">Package List ({filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)})</h5>
                 <small className="text-muted">
                   Sorted by {sortBy} ({sortOrder === 'asc' ? 'ascending' : 'descending'})
@@ -576,45 +578,45 @@ const Dashboard: React.FC = () => {
               </div>
 
               {filteredAndSortedGroupedPackages.length === 0 ? (
-                <div className="text-center py-5">
+                <div className="text-center py-3">
                   <p className="text-muted">No packages found.</p>
                   <Button variant="primary" onClick={() => setShowAddModal(true)}>
                     Add Your First Package
                   </Button>
                 </div>
               ) : (
-                <div className="table-responsive">
-                  <Table hover>
+                <div className="table-responsive table-container">
+                  <Table hover className="mb-0 table-compact">
                     <thead>
                       <tr>
                         <th 
-                          className="sortable-header"
+                          className="sortable-header py-1"
                           onClick={() => handleSort('date')}
                         >
                           Date Added {sortBy === 'date' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
                         <th 
-                          className="sortable-header"
+                          className="sortable-header py-1"
                           onClick={() => handleSort('client')}
                         >
                           Client {sortBy === 'client' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
-                        <th>
-                          Tracking & POD
-                        </th>
                         <th 
-                          className="sortable-header"
+                          className="sortable-header py-1 px-1"
                           onClick={() => handleSort('carrier')}
                         >
                           Carrier {sortBy === 'carrier' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
                         <th 
-                          className="sortable-header"
+                          className="sortable-header py-1"
                           onClick={() => handleSort('status')}
                         >
                           Status {sortBy === 'status' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
-                        <th>Actions</th>
+                        <th className="py-1 px-1">
+                          Tracking
+                        </th>
+                        <th className="py-1">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
