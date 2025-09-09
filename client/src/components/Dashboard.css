@@ -182,8 +182,30 @@ body {
   transform: translateY(-2px);
 }
 
+/* Compact Statistics Cards */
+.card .card-body.py-2 {
+  padding: 0.5rem !important;
+}
+
+.card .card-body.py-2 h3 {
+  font-size: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.card .card-body.py-2 p.small {
+  font-size: 0.75rem;
+}
+
 /* Table Enhancements */
 .table {
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+/* Compact Table Layout */
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
   border-radius: var(--border-radius);
   overflow: hidden;
 }
@@ -193,7 +215,13 @@ body {
   border-bottom: 2px solid var(--border-color);
   font-weight: 600;
   color: var(--text-primary);
-  padding: 1rem 0.75rem;
+  padding: 0.5rem 0.25rem;
+  font-size: 0.875rem;
+  border-right: 1px solid var(--border-color);
+}
+
+.table thead th:last-child {
+  border-right: none;
 }
 
 .table tbody tr {
@@ -206,9 +234,63 @@ body {
 }
 
 .table td {
-  padding: 0.75rem;
+  padding: 0.375rem 0.25rem;
   vertical-align: middle;
   border-color: var(--border-color);
+  font-size: 0.875rem;
+  border-right: 1px solid var(--border-color);
+}
+
+.table td:last-child {
+  border-right: none;
+}
+
+/* Compact Table Container */
+.table-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Responsive table width control */
+@media (min-width: 1200px) {
+  .table-container {
+    max-width: 1100px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .table-container {
+    max-width: 1300px;
+  }
+}
+
+/* Alternative: Centered compact table */
+.table-container.centered-compact {
+  max-width: 1000px;
+  margin: 0 auto;
+  box-shadow: var(--shadow);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+/* Alternative: Left-aligned compact table */
+.table-container.left-compact {
+  max-width: 1100px;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+/* Updated column spacing for new column order */
+/* Carrier column (position 3) and Tracking & POD column (position 5) */
+.table-compact th:nth-child(3),
+.table-compact th:nth-child(5),
+.table-compact td:nth-child(3),
+.table-compact td:nth-child(5) {
+  padding-left: 0.0625rem !important;
+  padding-right: 0.0625rem !important;
+  width: auto;
+  white-space: nowrap;
 }
 
 /* Badge Enhancements */
