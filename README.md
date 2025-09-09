@@ -190,7 +190,79 @@ The application is ready for deployment to platforms like:
 - **DigitalOcean** App Platform
 - **AWS** (EC2, RDS, S3)
 
-## 📄 License
+## � FedEx API Integration
+
+The application includes real-time FedEx API integration for Proof of Delivery (POD) data retrieval and storage.
+
+### FedEx API Setup
+
+1. **Create FedEx Developer Account**
+   - Visit [FedEx Developer Portal](https://developer.fedex.com/)
+   - Create a developer account
+   - Register your application
+
+2. **Get API Credentials**
+   - Obtain your `Client ID` and `Client Secret`
+   - These will be used for OAuth2 authentication
+
+3. **Configure Environment Variables**
+   
+   Add to your `server/.env` file:
+   ```env
+   # FedEx API Configuration
+   FEDEX_API_BASE_URL=https://apis.fedex.com
+   FEDEX_CLIENT_ID=your-fedex-client-id-here
+   FEDEX_CLIENT_SECRET=your-fedex-client-secret-here
+   ```
+
+4. **API Features**
+   - ✅ **Real POD Data**: Fetches actual delivery information from FedEx
+   - ✅ **Signature Information**: Retrieves signature data when available
+   - ✅ **Delivery Details**: Gets recipient name, delivery location, and instructions
+   - ✅ **Fallback Support**: Falls back to simulated data if API is unavailable
+   - ✅ **Error Handling**: Graceful handling of API failures
+
+### POD Data Structure
+
+The system captures comprehensive POD information:
+
+```typescript
+interface ProofOfDelivery {
+  deliveredTo?: string;           // Recipient name
+  deliveryLocation?: string;      // Delivery address/location
+  signatureRequired?: boolean;    // Whether signature was required
+  signatureObtained?: boolean;    // Whether signature was captured
+  signedBy?: string;              // Name of person who signed
+  deliveryPhoto?: string;         // URL to delivery photo (if available)
+  deliveryInstructions?: string;  // Special delivery instructions
+  proofOfDeliveryUrl?: string;    // Link to FedEx POD page
+  lastUpdated?: Date;             // When POD data was last updated
+}
+```
+
+### How It Works
+
+1. **Package Delivery Simulation**: When you simulate delivery for a FedEx package
+2. **API Call**: System calls FedEx API to check actual delivery status
+3. **POD Retrieval**: If delivered, fetches real POD data from FedEx
+4. **Database Storage**: Saves POD data to MongoDB with package record
+5. **Email Notifications**: Sends POD emails if configured (see Settings)
+
+### Testing Without API
+
+If you don't have FedEx API credentials, the system will:
+- Generate realistic simulated POD data
+- Maintain full functionality for testing
+- Log API attempts for debugging
+
+### Supported FedEx Services
+
+- FedEx Express (12-14 digit tracking)
+- FedEx Ground (15-18 digit tracking)
+- FedEx SmartPost (22 digit tracking starting with 96)
+- FedEx Freight (9-12 digit tracking)
+
+## �📄 License
 
 MIT License - see LICENSE file for details.
 

@@ -38,6 +38,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const PodEmailConfigSchema = new mongoose_1.Schema({
+    email1: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address for email1'],
+        default: undefined
+    },
+    email2: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address for email2'],
+        default: undefined
+    },
+    enabled: {
+        type: Boolean,
+        default: false
+    }
+}, { _id: false });
 const UserSchema = new mongoose_1.Schema({
     username: {
         type: String,
@@ -78,6 +98,10 @@ const UserSchema = new mongoose_1.Schema({
     emailNotifications: {
         type: Boolean,
         default: true
+    },
+    podEmailConfig: {
+        type: PodEmailConfigSchema,
+        default: () => ({ enabled: false })
     },
     isActive: {
         type: Boolean,

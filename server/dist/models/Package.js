@@ -52,6 +52,44 @@ const TrackingEventSchema = new mongoose_1.Schema({
         default: ''
     }
 }, { _id: false });
+const ProofOfDeliverySchema = new mongoose_1.Schema({
+    deliveredTo: {
+        type: String,
+        default: ''
+    },
+    deliveryLocation: {
+        type: String,
+        default: ''
+    },
+    signatureRequired: {
+        type: Boolean,
+        default: false
+    },
+    signatureObtained: {
+        type: Boolean,
+        default: false
+    },
+    signedBy: {
+        type: String,
+        default: ''
+    },
+    deliveryPhoto: {
+        type: String,
+        default: ''
+    },
+    deliveryInstructions: {
+        type: String,
+        default: ''
+    },
+    proofOfDeliveryUrl: {
+        type: String,
+        default: ''
+    },
+    lastUpdated: {
+        type: Date,
+        default: Date.now
+    }
+}, { _id: false });
 const PackageSchema = new mongoose_1.Schema({
     trackingNumber: {
         type: String,
@@ -93,6 +131,10 @@ const PackageSchema = new mongoose_1.Schema({
         default: ''
     },
     trackingHistory: [TrackingEventSchema],
+    proofOfDelivery: {
+        type: ProofOfDeliverySchema,
+        default: () => ({})
+    },
     lastUpdated: {
         type: Date,
         default: Date.now
