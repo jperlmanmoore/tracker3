@@ -154,7 +154,6 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
             </td>
-            <td></td>
           </tr>
           {group.packages?.map((pkg: any, index: number) => (
             <tr key={index}>
@@ -605,9 +604,6 @@ const Dashboard: React.FC = () => {
                           onClick={() => handleSort('client')}
                         >
                           Client {sortBy === 'client' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
-                        </th>
-                        <th>
-                          Tracking & POD
                         </th>
                         <th 
                           className="sortable-header"
