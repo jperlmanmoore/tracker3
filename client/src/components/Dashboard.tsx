@@ -605,6 +605,9 @@ const Dashboard: React.FC = () => {
                         >
                           Client {sortBy === 'client' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                         </th>
+                        <th>
+                          Tracking & POD
+                        </th>
                         <th 
                           className="sortable-header"
                           onClick={() => handleSort('carrier')}
