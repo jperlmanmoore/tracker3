@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Button, Card, Row, Col, Badge, Spinner, Alert, Image } from 'react-bootstrap';
 import { ProofOfDelivery } from '../types/package';
+// Ensure spodPdfUrl and spodPdfBase64 are present in ProofOfDelivery type
 import axios from 'axios';
 
 interface ProofOfDeliveryModalProps {
@@ -165,23 +166,60 @@ const ProofOfDeliveryModal: React.FC<ProofOfDeliveryModalProps> = ({
         </Card>
 
         {/* Proof Documentation */}
-        {(pod.deliveryPhoto || pod.proofOfDeliveryUrl) && (
+        {(pod.deliveryPhoto || pod.proofOfDeliveryUrl || pod.spodPdfUrl || pod.spodPdfBase64) && (
           <Card className="mb-3">
             <Card.Header>
               <strong>📸 Proof Documentation</strong>
             </Card.Header>
             <Card.Body>
+              {/* PPOD Photo */}
               {pod.deliveryPhoto && (
                 <div className="mb-3">
                   <p><strong>Delivery Photo:</strong></p>
                   <Image 
-                    src={pod.deliveryPhoto} 
+                    src={pod.deliveryPhoto.startsWith('http') ? pod.deliveryPhoto : `data:image/jpeg;base64,${pod.deliveryPhoto}`}
                     alt="Delivery Photo" 
                     thumbnail 
                     style={{ maxWidth: '300px', maxHeight: '200px' }}
                   />
+                  <div className="mt-2">
+                    <a
+                      href={pod.deliveryPhoto.startsWith('http') ? pod.deliveryPhoto : `data:image/jpeg;base64,${pod.deliveryPhoto}`}
+                      download={`PPOD_${trackingNumber || ''}.jpg`}
+                      className="btn btn-outline-secondary btn-sm"
+                    >
+                      Download Photo
+                    </a>
+                  </div>
                 </div>
               )}
+              {/* SPOD PDF */}
+              {pod.spodPdfUrl && (
+                <div className="mb-3">
+                  <p><strong>Signature Proof of Delivery (PDF):</strong></p>
+                  <a
+                    href={pod.spodPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline-primary btn-sm"
+                  >
+                    View/Download SPOD PDF
+                  </a>
+                </div>
+              )}
+              {pod.spodPdfBase64 && (
+                <div className="mb-3">
+                  <p><strong>Signature Proof of Delivery (PDF):</strong></p>
+                  <a
+                    href={`data:application/pdf;base64,${pod.spodPdfBase64}`}
+                    download={`SPOD_${trackingNumber || ''}.pdf`}
+                    className="btn btn-outline-primary btn-sm"
+                  >
+                    Download SPOD PDF
+                  </a>
+                </div>
+              )}
+              {/* Official Carrier POD URL */}
               {pod.proofOfDeliveryUrl && (
                 <div>
                   <Button 

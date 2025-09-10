@@ -10,17 +10,15 @@ import EditPackageModal from './EditPackageModal';
 import DeleteCustomerModal from './DeleteCustomerModal';
 import UserSettings from './UserSettings';
 import axios from 'axios';
-import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaTruck, FaSearch, FaFilter, FaSortUp, FaSortDown, FaCog } from 'react-icons/fa';
+import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaSearch, FaFilter, FaSortUp, FaSortDown, FaCog } from 'react-icons/fa';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
-  // ...existing useState declarations...
-
-
   // State declarations
   const [packages, setPackages] = useState<Array<{ _id: string; packages: Package[] }>>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
   const [sortBy, setSortBy] = useState<'date' | 'client' | 'carrier' | 'status'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterClient, setFilterClient] = useState<string>('');
@@ -252,23 +250,7 @@ const Dashboard: React.FC = () => {
               <td className="py-2">
                 {/* Individual package actions */}
                 <div className="package-actions">
-                  {pkg.status && pkg.status.toLowerCase() !== 'delivered' && (
-                    <OverlayTrigger placement="top" overlay={<Tooltip>Simulate Delivery</Tooltip>}>
-                      <Button 
-                        variant="outline-warning" 
-                        size="sm"
-                        onClick={() => simulateDelivery({
-                          ...pkg,
-                          customer: group._id
-                        })}
-                        className="d-flex align-items-center gap-1"
-                        title="Simulate Delivery (for testing)"
-                      >
-                        {FaTruck({size: 12})}
-                        Simulate
-                      </Button>
-                    </OverlayTrigger>
-                  )}
+                  {/* Removed simulate delivery button for production use */}
                 </div>
               </td>
             </tr>
@@ -364,25 +346,6 @@ const Dashboard: React.FC = () => {
     setShowBulkProofModal(true);
   };
 
-  const simulateDelivery = async (packageData: any): Promise<void> => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`/api/packages/${packageData._id}/simulate-delivery`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.data.success) {
-        // Refresh the packages list to show updated status
-        fetchGroupedPackages();
-      } else {
-        setError(response.data.message || 'Failed to simulate delivery');
-      }
-    } catch (err: any) {
-      console.error('Simulate delivery error:', err);
-      setError(err.response?.data?.message || 'Failed to simulate delivery');
-    }
-  };
-
   const openEditPackage = (packageData: any): void => {
     setSelectedPackageForEdit({
       ...packageData,
@@ -432,6 +395,52 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const refreshAllPackages = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Get all package IDs from the current packages
+      const allPackageIds = filteredAndSortedGroupedPackages.flatMap(group =>
+        group.packages.map(pkg => pkg._id)
+      );
+
+      if (allPackageIds.length === 0) {
+        setError('No packages to refresh');
+        return;
+      }
+
+      const token = localStorage.getItem('token');
+      const response = await axios.post('/api/packages/bulk-refresh', {
+        packageIds: allPackageIds
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        // Refresh the packages list to show updated statuses
+        await fetchGroupedPackages();
+        
+        // Show success message with update count
+        const { updatedPackages, totalPackages } = response.data.data;
+        if (updatedPackages > 0) {
+          setSuccess(`${updatedPackages} of ${totalPackages} packages updated with latest tracking information`);
+          setTimeout(() => setSuccess(''), 5000);
+        } else {
+          setSuccess('All packages are up to date');
+          setTimeout(() => setSuccess(''), 3000);
+        }
+      } else {
+        setError(response.data.message || 'Failed to refresh packages');
+      }
+    } catch (err: any) {
+      console.error('Bulk refresh error:', err);
+      setError(err.response?.data?.message || 'Failed to refresh packages');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -458,6 +467,17 @@ const Dashboard: React.FC = () => {
               <p className="text-muted mb-0">Welcome back, {user?.firstName || user?.username}!</p>
             </div>
             <div className="d-flex gap-2">
+              <OverlayTrigger placement="bottom" overlay={<Tooltip>Refresh All Package Statuses</Tooltip>}>
+                <Button 
+                  variant="outline-success" 
+                  className="d-flex align-items-center gap-2"
+                  onClick={refreshAllPackages}
+                  disabled={loading}
+                >
+                  {FaSearch({size: 14})}
+                  Refresh All
+                </Button>
+              </OverlayTrigger>
               <OverlayTrigger placement="bottom" overlay={<Tooltip>User Settings</Tooltip>}>
                 <Button 
                   variant="outline-info" 

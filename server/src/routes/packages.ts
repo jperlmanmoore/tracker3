@@ -2,8 +2,10 @@ import express, { Request, Response, Router } from 'express';
 import Package from '../models/Package';
 import { authenticateToken } from '../middleware/auth';
 import { ApiResponse } from '../types/common';
-import { detectCarrier, getTrackingUrl, getBulkTrackingUrl, parseTrackingNumbers, simulateDelivery } from '../utils/trackingUtils';
+import { detectCarrier, getTrackingUrl, getBulkTrackingUrl, parseTrackingNumbers } from '../utils/trackingUtils';
 import { sendPodEmailsToMultipleRecipients } from '../utils/emailService';
+import { checkFedExDeliveryStatus, getFedExTrackingHistory } from '../utils/fedexApi';
+import { checkUSPSDeliveryStatus, getUSPSTrackingHistory } from '../utils/uspsApi';
 import User from '../models/User';
 
 const router: Router = express.Router();
@@ -11,6 +13,12 @@ const router: Router = express.Router();
 // Helper function to send POD emails if configured
 const sendPodEmailsIfConfigured = async (pkg: any, userId: string): Promise<void> => {
   try {
+    // Check if SPOD email has already been sent
+    if (pkg.spodEmailSent) {
+      console.log(`SPOD email already sent for ${pkg.trackingNumber}`);
+      return;
+    }
+
     // Get user's POD email configuration
     const user = await User.findById(userId);
     if (!user?.podEmailConfig?.enabled) {
@@ -38,6 +46,10 @@ const sendPodEmailsIfConfigured = async (pkg: any, userId: string): Promise<void
 
     // Send emails
     const results = await sendPodEmailsToMultipleRecipients(emailsToSend, podEmailData);
+
+    // Mark SPOD email as sent
+    pkg.spodEmailSent = true;
+    await pkg.save();
 
     console.log(`POD emails sent for ${pkg.trackingNumber}:`, results);
   } catch (error) {
@@ -179,6 +191,59 @@ router.post('/', authenticateToken, async (req: Request, res: Response): Promise
 
         // Save the new package to the database
         await newPackage.save();
+
+        // Automatically refresh the package status after creation
+        try {
+          console.log(`Auto-refreshing status for newly created package: ${trackingNumber}`);
+          
+          let updatedStatus = newPackage.status;
+          let deliveryDate = newPackage.deliveryDate;
+          let trackingHistory = newPackage.trackingHistory || [];
+
+          if (detectedCarrier === 'FedEx') {
+            const deliveryStatus = await checkFedExDeliveryStatus(trackingNumber);
+            
+            if (deliveryStatus.isDelivered) {
+              updatedStatus = 'Delivered';
+              deliveryDate = deliveryStatus.deliveryDate || new Date();
+              trackingHistory.push({
+                date: deliveryDate,
+                status: 'Delivered',
+                description: 'Package delivered successfully'
+              });
+              console.log(`Auto-updated ${trackingNumber} to Delivered status`);
+            }
+          } else if (detectedCarrier === 'USPS') {
+            const uspsStatus = await checkUSPSDeliveryStatus(trackingNumber);
+            
+            if (uspsStatus.isDelivered) {
+              updatedStatus = 'Delivered';
+              deliveryDate = uspsStatus.deliveryDate || new Date();
+              trackingHistory.push({
+                date: deliveryDate,
+                status: 'Delivered',
+                description: 'Package delivered successfully'
+              });
+              console.log(`Auto-updated ${trackingNumber} to Delivered status`);
+            }
+          }
+
+          // Update package with refreshed data
+          newPackage.status = updatedStatus;
+          if (deliveryDate && !newPackage.deliveryDate) {
+            newPackage.deliveryDate = deliveryDate;
+          }
+          newPackage.trackingHistory = trackingHistory;
+          await newPackage.save();
+
+          // Send POD emails if package was delivered
+          if (updatedStatus === 'Delivered' && deliveryDate && !newPackage.spodEmailSent) {
+            await sendPodEmailsIfConfigured(newPackage, userId);
+          }
+        } catch (refreshError) {
+          console.error(`Auto-refresh failed for ${trackingNumber}:`, refreshError);
+          // Continue with package creation even if refresh fails
+        }
 
         console.log(`Successfully created package: ${trackingNumber}`);
         createdPackages.push(newPackage);
@@ -382,27 +447,137 @@ router.post('/:id/refresh', authenticateToken, async (req: Request, res: Respons
       return;
     }
 
-    // Simulate tracking update
-    const mockStatuses: ('In Transit' | 'Out for Delivery' | 'Delivered')[] = ['In Transit', 'Out for Delivery', 'Delivered'];
-    const randomIndex = Math.floor(Math.random() * mockStatuses.length);
-    const randomStatus = mockStatuses[randomIndex]!;
-    
-    pkg.status = randomStatus;
-    pkg.trackingHistory.push({
-      date: new Date(),
-      status: randomStatus,
-      description: `Status updated via tracking refresh`
-    });
+    // Fetch real tracking data based on carrier
+    let updatedStatus = pkg.status;
+    let deliveryDate = pkg.deliveryDate;
+    let trackingHistory = pkg.trackingHistory || [];
 
-    if (randomStatus === 'Delivered' && !pkg.deliveryDate) {
-      pkg.deliveryDate = new Date();
+    try {
+      if (pkg.carrier === 'FedEx') {
+        console.log(`Fetching real FedEx tracking data for ${pkg.trackingNumber}`);
+
+        // Get delivery status from FedEx API
+        const deliveryStatus = await checkFedExDeliveryStatus(pkg.trackingNumber);
+
+        if (deliveryStatus.isDelivered) {
+          updatedStatus = 'Delivered';
+          deliveryDate = deliveryStatus.deliveryDate || new Date();
+
+          // Add delivery event to tracking history
+          trackingHistory.push({
+            date: deliveryDate,
+            status: 'Delivered',
+            description: 'Package delivered successfully'
+          });
+
+          console.log(`Package ${pkg.trackingNumber} marked as delivered`);
+        } else {
+          // Get tracking history for more detailed status
+          const fedexHistory = await getFedExTrackingHistory(pkg.trackingNumber);
+
+          if (fedexHistory.length > 0) {
+            // Use the latest event from FedEx
+            const latestEvent = fedexHistory[fedexHistory.length - 1];
+            if (latestEvent) {
+              updatedStatus = mapFedExStatusToInternal(latestEvent.status);
+
+              // Add new events to tracking history (avoid duplicates)
+              const existingDates = new Set(trackingHistory.map(h => h.date.getTime()));
+              const newEvents = fedexHistory.filter(event =>
+                !existingDates.has(event.date.getTime())
+              );
+
+              trackingHistory.push(...newEvents.map(event => ({
+                date: event.date,
+                status: mapFedExStatusToInternal(event.status),
+                location: event.location || '',
+                description: event.description || event.status
+              })));
+
+              console.log(`Updated ${pkg.trackingNumber} status to: ${updatedStatus}`);
+            }
+          }
+        }
+      } else if (pkg.carrier === 'USPS') {
+        // Check USPS delivery status
+        console.log(`Fetching USPS tracking data for ${pkg.trackingNumber}`);
+
+        const uspsStatus = await checkUSPSDeliveryStatus(pkg.trackingNumber);
+
+        if (uspsStatus.isDelivered) {
+          updatedStatus = 'Delivered';
+          deliveryDate = uspsStatus.deliveryDate || new Date();
+
+          // Add delivery event to tracking history
+          trackingHistory.push({
+            date: deliveryDate,
+            status: 'Delivered',
+            description: 'Package delivered successfully'
+          });
+
+          console.log(`Package ${pkg.trackingNumber} marked as delivered`);
+        } else {
+          // Get tracking history for more detailed status
+          const uspsHistory = await getUSPSTrackingHistory(pkg.trackingNumber);
+
+          if (uspsHistory.length > 0) {
+            // Use the latest event from USPS
+            const latestEvent = uspsHistory[uspsHistory.length - 1];
+            if (latestEvent) {
+              updatedStatus = mapUSPSStatusToInternal(latestEvent.status);
+
+              // Add new events to tracking history (avoid duplicates)
+              const existingDates = new Set(trackingHistory.map(h => h.date.getTime()));
+              const newEvents = uspsHistory.filter(event =>
+                !existingDates.has(event.date.getTime())
+              );
+
+              trackingHistory.push(...newEvents.map(event => ({
+                date: event.date,
+                status: mapUSPSStatusToInternal(event.status),
+                location: event.location || '',
+                description: event.description || event.status
+              })));
+
+              console.log(`Updated ${pkg.trackingNumber} status to: ${updatedStatus}`);
+            }
+          } else {
+            // Keep current status but add refresh note
+            trackingHistory.push({
+              date: new Date(),
+              status: pkg.status,
+              description: 'Tracking information refreshed'
+            });
+          }
+        }
+      }
+    } catch (apiError) {
+      console.error(`API error refreshing ${pkg.carrier} tracking for ${pkg.trackingNumber}:`, apiError);
+
+      // Fallback: keep current status but add refresh note
+      trackingHistory.push({
+        date: new Date(),
+        status: pkg.status,
+        description: 'Tracking refresh attempted - API temporarily unavailable'
+      });
     }
 
+    // Update package with new data
+    pkg.status = updatedStatus;
+    if (deliveryDate && !pkg.deliveryDate) {
+      pkg.deliveryDate = deliveryDate;
+    }
+    pkg.trackingHistory = trackingHistory;
     await pkg.save();
+
+    // Send POD emails if package was just delivered
+    if (updatedStatus === 'Delivered' && deliveryDate && pkg.deliveryDate && !pkg.spodEmailSent) {
+      await sendPodEmailsIfConfigured(pkg, userId);
+    }
 
     res.json({
       success: true,
-      message: 'Package tracking refreshed',
+      message: 'Package tracking refreshed successfully',
       data: pkg
     } as ApiResponse);
   } catch (error: any) {
@@ -413,6 +588,39 @@ router.post('/:id/refresh', authenticateToken, async (req: Request, res: Respons
     } as ApiResponse);
   }
 });
+
+// Helper function to map FedEx status to internal status
+const mapFedExStatusToInternal = (fedexStatus: string): string => {
+  const statusMap: { [key: string]: string } = {
+    'Delivered': 'Delivered',
+    'Out for Delivery': 'Out for Delivery',
+    'In Transit': 'In Transit',
+    'Picked Up': 'In Transit',
+    'Arrived at FedEx location': 'In Transit',
+    'Departed FedEx location': 'In Transit',
+    'At FedEx destination facility': 'In Transit',
+    'On FedEx vehicle for delivery': 'Out for Delivery',
+    'Delivered to recipient': 'Delivered'
+  };
+
+  return statusMap[fedexStatus] || 'In Transit';
+};
+
+// Helper function to map USPS status to internal status
+const mapUSPSStatusToInternal = (uspsStatus: string): string => {
+  const statusMap: { [key: string]: string } = {
+    'Delivered': 'Delivered',
+    'Out for Delivery': 'Out for Delivery',
+    'In Transit': 'In Transit',
+    'Processed': 'In Transit',
+    'Departed': 'In Transit',
+    'Arrived': 'In Transit',
+    'Acceptance': 'In Transit',
+    'Delivered to Recipient': 'Delivered'
+  };
+
+  return statusMap[uspsStatus] || 'In Transit';
+};
 
 // Get bulk tracking URLs
 router.get('/tracking-urls/:carrier', authenticateToken, async (req: Request, res: Response): Promise<void> => {
@@ -658,8 +866,171 @@ router.post('/proof-of-delivery/batch', authenticateToken, async (req: Request, 
   }
 });
 
-// Simulate package delivery (for testing purposes)
-router.post('/:id/simulate-delivery', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+// Bulk refresh package tracking
+router.post('/bulk-refresh', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user._id.toString();
+    const { packageIds } = req.body;
+
+    if (!packageIds || !Array.isArray(packageIds)) {
+      res.status(400).json({
+        success: false,
+        message: 'Package IDs array is required'
+      } as ApiResponse);
+      return;
+    }
+
+    const packages = await Package.find({
+      _id: { $in: packageIds },
+      userId
+    });
+
+    if (packages.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'No packages found'
+      } as ApiResponse);
+      return;
+    }
+
+    const results = [];
+    let updatedCount = 0;
+
+    for (const pkg of packages) {
+      try {
+        // Fetch real tracking data based on carrier
+        let updatedStatus = pkg.status;
+        let deliveryDate = pkg.deliveryDate;
+        let trackingHistory = pkg.trackingHistory || [];
+
+        if (pkg.carrier === 'FedEx') {
+          console.log(`Bulk refresh: Fetching FedEx data for ${pkg.trackingNumber}`);
+
+          const deliveryStatus = await checkFedExDeliveryStatus(pkg.trackingNumber);
+
+          if (deliveryStatus.isDelivered) {
+            updatedStatus = 'Delivered';
+            deliveryDate = deliveryStatus.deliveryDate || new Date();
+            trackingHistory.push({
+              date: deliveryDate,
+              status: 'Delivered',
+              description: 'Package delivered successfully'
+            });
+          } else {
+            const fedexHistory = await getFedExTrackingHistory(pkg.trackingNumber);
+            if (fedexHistory.length > 0) {
+              const latestEvent = fedexHistory[fedexHistory.length - 1];
+              if (latestEvent) {
+                updatedStatus = mapFedExStatusToInternal(latestEvent.status);
+                const existingDates = new Set(trackingHistory.map(h => h.date.getTime()));
+                const newEvents = fedexHistory.filter(event =>
+                  !existingDates.has(event.date.getTime())
+                );
+                trackingHistory.push(...newEvents.map(event => ({
+                  date: event.date,
+                  status: mapFedExStatusToInternal(event.status),
+                  location: event.location || '',
+                  description: event.description || event.status
+                })));
+              }
+            }
+          }
+        } else if (pkg.carrier === 'USPS') {
+          console.log(`Bulk refresh: Checking USPS data for ${pkg.trackingNumber}`);
+
+          const uspsStatus = await checkUSPSDeliveryStatus(pkg.trackingNumber);
+
+          if (uspsStatus.isDelivered) {
+            updatedStatus = 'Delivered';
+            deliveryDate = uspsStatus.deliveryDate || new Date();
+            trackingHistory.push({
+              date: deliveryDate,
+              status: 'Delivered',
+              description: 'Package delivered successfully'
+            });
+          } else {
+            const uspsHistory = await getUSPSTrackingHistory(pkg.trackingNumber);
+            if (uspsHistory.length > 0) {
+              const latestEvent = uspsHistory[uspsHistory.length - 1];
+              if (latestEvent) {
+                updatedStatus = mapUSPSStatusToInternal(latestEvent.status);
+                const existingDates = new Set(trackingHistory.map(h => h.date.getTime()));
+                const newEvents = uspsHistory.filter(event =>
+                  !existingDates.has(event.date.getTime())
+                );
+                trackingHistory.push(...newEvents.map(event => ({
+                  date: event.date,
+                  status: mapUSPSStatusToInternal(event.status),
+                  location: event.location || '',
+                  description: event.description || event.status
+                })));
+              }
+            } else {
+              trackingHistory.push({
+                date: new Date(),
+                status: pkg.status,
+                description: 'Tracking information refreshed'
+              });
+            }
+          }
+        }
+
+        // Update package if status changed
+        if (updatedStatus !== pkg.status || (deliveryDate && !pkg.deliveryDate)) {
+          pkg.status = updatedStatus;
+          if (deliveryDate && !pkg.deliveryDate) {
+            pkg.deliveryDate = deliveryDate;
+          }
+          pkg.trackingHistory = trackingHistory;
+          await pkg.save();
+          updatedCount++;
+
+          // Send POD emails if package was just delivered
+          if (updatedStatus === 'Delivered' && deliveryDate && !pkg.spodEmailSent) {
+            await sendPodEmailsIfConfigured(pkg, userId);
+          }
+        }
+
+        results.push({
+          id: pkg._id,
+          trackingNumber: pkg.trackingNumber,
+          carrier: pkg.carrier,
+          oldStatus: pkg.status,
+          newStatus: updatedStatus,
+          updated: updatedStatus !== pkg.status
+        });
+
+      } catch (error) {
+        console.error(`Error refreshing ${pkg.trackingNumber}:`, error);
+        results.push({
+          id: pkg._id,
+          trackingNumber: pkg.trackingNumber,
+          carrier: pkg.carrier,
+          error: 'Failed to refresh tracking'
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Refreshed ${packages.length} packages, ${updatedCount} updated`,
+      data: {
+        totalPackages: packages.length,
+        updatedPackages: updatedCount,
+        results
+      }
+    } as ApiResponse);
+  } catch (error: any) {
+    console.error('Bulk refresh error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    } as ApiResponse);
+  }
+});
+
+// Manually trigger SPOD email for testing
+router.post('/:id/send-spod-email', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user._id.toString();
     const packageId = req.params.id;
@@ -674,90 +1045,27 @@ router.post('/:id/simulate-delivery', authenticateToken, async (req: Request, re
       return;
     }
 
-    if (pkg.status === 'Delivered') {
+    if (pkg.status !== 'Delivered') {
       res.status(400).json({
         success: false,
-        message: 'Package is already delivered'
+        message: 'Package must be delivered to send SPOD email'
       } as ApiResponse);
       return;
     }
 
-    // Simulate delivery
-    const deliveryData = await simulateDelivery(pkg.trackingNumber, pkg.carrier);
-    
-    pkg.status = deliveryData.status;
-    pkg.deliveryDate = deliveryData.deliveryDate;
-    pkg.proofOfDelivery = deliveryData.proofOfDelivery;
-    
-    // Add tracking history entry
-    pkg.trackingHistory.push({
-      date: new Date(),
-      status: 'Delivered',
-      description: 'Package delivered - Simulated for testing'
-    });
-
+    // Reset SPOD email sent flag for testing
+    pkg.spodEmailSent = false;
     await pkg.save();
 
-    // Send POD emails if configured
+    // Send POD emails
     await sendPodEmailsIfConfigured(pkg, userId);
 
     res.json({
       success: true,
-      message: 'Package delivery simulated successfully',
-      data: {
-        package: pkg,
-        proofOfDelivery: pkg.proofOfDelivery
-      }
+      message: 'SPOD email sent successfully'
     } as ApiResponse);
   } catch (error: any) {
-    console.error('Simulate delivery error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    } as ApiResponse);
-  }
-});
-
-// Delete all packages for a customer
-router.delete('/customer/:customerName', authenticateToken, async (req: Request, res: Response): Promise<void> => {
-  try {
-    const userId = req.user._id.toString();
-    const customerName = req.params.customerName;
-    
-    if (!customerName) {
-      res.status(400).json({
-        success: false,
-        message: 'Customer name is required'
-      } as ApiResponse);
-      return;
-    }
-
-    const decodedCustomerName = decodeURIComponent(customerName);
-
-    // Find all packages for this customer
-    const packages = await Package.find({ userId, customer: decodedCustomerName });
-    
-    if (packages.length === 0) {
-      res.status(404).json({
-        success: false,
-        message: 'No packages found for this customer'
-      } as ApiResponse);
-      return;
-    }
-
-    // Delete all packages for this customer
-    const deleteResult = await Package.deleteMany({ userId, customer: decodedCustomerName });
-
-    res.json({
-      success: true,
-      message: `Deleted ${deleteResult.deletedCount} package(s) for customer: ${decodedCustomerName}`,
-      data: {
-        deletedCount: deleteResult.deletedCount,
-        customerName: decodedCustomerName
-      }
-    } as ApiResponse);
-  } catch (error: any) {
-    console.error('Delete customer packages error:', error);
+    console.error('Send SPOD email error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

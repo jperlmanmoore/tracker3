@@ -135,6 +135,10 @@ const PackageSchema = new mongoose_1.Schema({
         type: ProofOfDeliverySchema,
         default: () => ({})
     },
+    spodEmailSent: {
+        type: Boolean,
+        default: false
+    },
     lastUpdated: {
         type: Date,
         default: Date.now

@@ -104,6 +104,10 @@ const PackageSchema = new Schema<IPackage>({
     type: ProofOfDeliverySchema,
     default: () => ({})
   },
+  spodEmailSent: {
+    type: Boolean,
+    default: false
+  },
   lastUpdated: {
     type: Date,
     default: Date.now

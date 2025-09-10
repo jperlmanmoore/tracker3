@@ -43,7 +43,9 @@ export interface ProofOfDelivery {
   signatureRequired?: boolean;
   signatureObtained?: boolean;
   signedBy?: string;
-  deliveryPhoto?: string;
+  deliveryPhoto?: string; // PPOD image URL or base64
+  spodPdfUrl?: string;    // SPOD PDF URL or base64
+  spodPdfBase64?: string; // SPOD PDF as base64 (optional)
   deliveryInstructions?: string;
   proofOfDeliveryUrl?: string;
   lastUpdated?: Date;
@@ -61,6 +63,7 @@ export interface IPackage extends Document {
   notes?: string;
   trackingHistory: TrackingEvent[];
   proofOfDelivery?: ProofOfDelivery;
+  spodEmailSent: boolean;
   lastUpdated: Date;
   userId: string;
   createdAt: Date;

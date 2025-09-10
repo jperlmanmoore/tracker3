@@ -19,7 +19,7 @@ const createTransporter = () => {
 const sendPodEmail = async (to, podData) => {
     try {
         const transporter = createTransporter();
-        const subject = `Proof of Delivery - ${podData.trackingNumber} (${podData.carrier})`;
+        const subject = `${podData.customer} - FedEx POD - ${podData.trackingNumber}`;
         const htmlContent = generatePodEmailHtml(podData);
         const mailOptions = {
             from: process.env.SMTP_FROM || process.env.SMTP_USER,

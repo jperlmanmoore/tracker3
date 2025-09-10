@@ -16,6 +16,8 @@ export interface ProofOfDelivery {
   deliveryPhoto?: string;
   deliveryInstructions?: string;
   proofOfDeliveryUrl?: string;
+  spodPdfUrl?: string;
+  spodPdfBase64?: string;
   lastUpdated?: string;
 }
 

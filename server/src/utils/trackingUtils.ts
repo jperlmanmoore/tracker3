@@ -1,5 +1,5 @@
 // Utility function to detect carrier from tracking number
-import { getFedExPod, checkFedExDeliveryStatus } from './fedexApi';
+import { getFedExPod } from './fedexApi';
 
 export const detectCarrier = (trackingNumber: string): 'USPS' | 'FedEx' | null => {
   const cleanNumber = trackingNumber.replace(/\s+/g, '').toUpperCase();
@@ -91,85 +91,4 @@ export const parseTrackingNumbers = (input: string): string[] => {
     .split(/[,\n\r\t\s]+/)
     .map(num => num.trim())
     .filter(num => num.length > 0);
-};
-
-// Simulate delivery status update (for testing)
-export const simulateDelivery = async (trackingNumber: string, carrier: 'USPS' | 'FedEx'): Promise<{
-  status: string;
-  deliveryDate: Date;
-  proofOfDelivery: any;
-}> => {
-  try {
-    // For FedEx packages, try to get real POD data from FedEx API
-    if (carrier === 'FedEx') {
-      console.log(`Attempting to fetch real FedEx POD data for ${trackingNumber}`);
-
-      try {
-        const deliveryStatus = await checkFedExDeliveryStatus(trackingNumber);
-
-        if (deliveryStatus.isDelivered && deliveryStatus.pod) {
-          console.log(`Found real FedEx delivery data for ${trackingNumber}`);
-          return {
-            status: 'Delivered',
-            deliveryDate: deliveryStatus.deliveryDate || new Date(),
-            proofOfDelivery: deliveryStatus.pod
-          };
-        } else {
-          console.log(`Package ${trackingNumber} not yet delivered according to FedEx API, generating simulated data`);
-        }
-      } catch (apiError) {
-        console.log(`FedEx API error for ${trackingNumber}, falling back to simulated data:`, apiError);
-      }
-    }
-
-    // Fallback to simulated data for USPS or when FedEx API fails
-    console.log(`Generating simulated POD data for ${trackingNumber} (${carrier})`);
-    const baseProofOfDelivery = {
-      deliveredTo: 'Recipient',
-      deliveryLocation: Math.random() > 0.5 ? 'Front Door' : 'Mailbox',
-      signatureRequired: carrier === 'FedEx' ? Math.random() > 0.4 : Math.random() > 0.7,
-      signatureObtained: false,
-      signedBy: '',
-      deliveryPhoto: '',
-      deliveryInstructions: Math.random() > 0.5 ? 'Left at front door' : 'Delivered to secure location',
-      proofOfDeliveryUrl: `https://${carrier.toLowerCase()}.com/proof-of-delivery/${trackingNumber}`,
-      lastUpdated: new Date()
-    };
-
-    // If signature required, randomly add signature data
-    if (baseProofOfDelivery.signatureRequired && Math.random() > 0.3) {
-      baseProofOfDelivery.signatureObtained = true;
-      baseProofOfDelivery.signedBy = 'J.DOE';
-    }
-
-    // USPS sometimes has delivery photos
-    if (carrier === 'USPS' && Math.random() > 0.6) {
-      baseProofOfDelivery.deliveryPhoto = `https://tools.usps.com/images/delivery-photo-${trackingNumber}.jpg`;
-    }
-
-    return {
-      status: 'Delivered',
-      deliveryDate: new Date(),
-      proofOfDelivery: baseProofOfDelivery
-    };
-  } catch (error) {
-    console.error(`Error in simulateDelivery for ${trackingNumber}:`, error);
-
-    // Return basic fallback data
-    return {
-      status: 'Delivered',
-      deliveryDate: new Date(),
-      proofOfDelivery: {
-        deliveredTo: 'Recipient',
-        deliveryLocation: 'Delivery Address',
-        signatureRequired: false,
-        signatureObtained: false,
-        signedBy: '',
-        deliveryPhoto: '',
-        deliveryInstructions: 'Package delivered successfully',
-        proofOfDeliveryUrl: `https://${carrier.toLowerCase()}.com/proof-of-delivery/${trackingNumber}`,
-        lastUpdated: new Date()
-      }
-    };
-  }
 };

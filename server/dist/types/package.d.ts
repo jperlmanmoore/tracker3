@@ -51,6 +51,7 @@ export interface IPackage extends Document {
     notes?: string;
     trackingHistory: TrackingEvent[];
     proofOfDelivery?: ProofOfDelivery;
+    spodEmailSent: boolean;
     lastUpdated: Date;
     userId: string;
     createdAt: Date;

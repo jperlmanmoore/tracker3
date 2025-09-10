@@ -30,15 +30,51 @@ export const sendPodEmail = async (
   try {
     const transporter = createTransporter();
 
-    const subject = `Proof of Delivery - ${podData.trackingNumber} (${podData.carrier})`;
-
+    const subject = `${podData.customer} - FedEx POD - ${podData.trackingNumber}`;
     const htmlContent = generatePodEmailHtml(podData);
 
-    const mailOptions = {
+    // Prepare attachments array
+    const attachments: any[] = [];
+    const pod = podData.proofOfDelivery;
+
+    // Attach SPOD PDF (by URL or base64)
+    if (pod.spodPdfBase64) {
+      attachments.push({
+        filename: `SPOD_${podData.trackingNumber}.pdf`,
+        content: pod.spodPdfBase64,
+        encoding: 'base64',
+        contentType: 'application/pdf'
+      });
+    } else if (pod.spodPdfUrl) {
+      attachments.push({
+        filename: `SPOD_${podData.trackingNumber}.pdf`,
+        path: pod.spodPdfUrl,
+        contentType: 'application/pdf'
+      });
+    }
+
+    // Attach PPOD photo (by URL or base64)
+    if (pod.deliveryPhoto && pod.deliveryPhoto.startsWith('http')) {
+      attachments.push({
+        filename: `PPOD_${podData.trackingNumber}.jpg`,
+        path: pod.deliveryPhoto,
+        contentType: 'image/jpeg'
+      });
+    } else if (pod.deliveryPhoto && !pod.deliveryPhoto.startsWith('http')) {
+      attachments.push({
+        filename: `PPOD_${podData.trackingNumber}.jpg`,
+        content: pod.deliveryPhoto,
+        encoding: 'base64',
+        contentType: 'image/jpeg'
+      });
+    }
+
+    const mailOptions: any = {
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to,
       subject,
-      html: htmlContent
+      html: htmlContent,
+      attachments: attachments.length > 0 ? attachments : undefined
     };
 
     await transporter.sendMail(mailOptions);

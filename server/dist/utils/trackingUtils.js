@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.simulateDelivery = exports.parseTrackingNumbers = exports.getBulkTrackingUrl = exports.getTrackingUrl = exports.detectCarrier = void 0;
-const fedexApi_1 = require("./fedexApi");
+exports.parseTrackingNumbers = exports.getBulkTrackingUrl = exports.getTrackingUrl = exports.detectCarrier = void 0;
 const detectCarrier = (trackingNumber) => {
     const cleanNumber = trackingNumber.replace(/\s+/g, '').toUpperCase();
     console.log(`Detecting carrier for tracking number: ${trackingNumber}`);
@@ -76,71 +75,4 @@ const parseTrackingNumbers = (input) => {
         .filter(num => num.length > 0);
 };
 exports.parseTrackingNumbers = parseTrackingNumbers;
-const simulateDelivery = async (trackingNumber, carrier) => {
-    try {
-        if (carrier === 'FedEx') {
-            console.log(`Attempting to fetch real FedEx POD data for ${trackingNumber}`);
-            try {
-                const deliveryStatus = await (0, fedexApi_1.checkFedExDeliveryStatus)(trackingNumber);
-                if (deliveryStatus.isDelivered && deliveryStatus.pod) {
-                    console.log(`Found real FedEx delivery data for ${trackingNumber}`);
-                    return {
-                        status: 'Delivered',
-                        deliveryDate: deliveryStatus.deliveryDate || new Date(),
-                        proofOfDelivery: deliveryStatus.pod
-                    };
-                }
-                else {
-                    console.log(`Package ${trackingNumber} not yet delivered according to FedEx API, generating simulated data`);
-                }
-            }
-            catch (apiError) {
-                console.log(`FedEx API error for ${trackingNumber}, falling back to simulated data:`, apiError);
-            }
-        }
-        console.log(`Generating simulated POD data for ${trackingNumber} (${carrier})`);
-        const baseProofOfDelivery = {
-            deliveredTo: 'Recipient',
-            deliveryLocation: Math.random() > 0.5 ? 'Front Door' : 'Mailbox',
-            signatureRequired: carrier === 'FedEx' ? Math.random() > 0.4 : Math.random() > 0.7,
-            signatureObtained: false,
-            signedBy: '',
-            deliveryPhoto: '',
-            deliveryInstructions: Math.random() > 0.5 ? 'Left at front door' : 'Delivered to secure location',
-            proofOfDeliveryUrl: `https://${carrier.toLowerCase()}.com/proof-of-delivery/${trackingNumber}`,
-            lastUpdated: new Date()
-        };
-        if (baseProofOfDelivery.signatureRequired && Math.random() > 0.3) {
-            baseProofOfDelivery.signatureObtained = true;
-            baseProofOfDelivery.signedBy = 'J.DOE';
-        }
-        if (carrier === 'USPS' && Math.random() > 0.6) {
-            baseProofOfDelivery.deliveryPhoto = `https://tools.usps.com/images/delivery-photo-${trackingNumber}.jpg`;
-        }
-        return {
-            status: 'Delivered',
-            deliveryDate: new Date(),
-            proofOfDelivery: baseProofOfDelivery
-        };
-    }
-    catch (error) {
-        console.error(`Error in simulateDelivery for ${trackingNumber}:`, error);
-        return {
-            status: 'Delivered',
-            deliveryDate: new Date(),
-            proofOfDelivery: {
-                deliveredTo: 'Recipient',
-                deliveryLocation: 'Delivery Address',
-                signatureRequired: false,
-                signatureObtained: false,
-                signedBy: '',
-                deliveryPhoto: '',
-                deliveryInstructions: 'Package delivered successfully',
-                proofOfDeliveryUrl: `https://${carrier.toLowerCase()}.com/proof-of-delivery/${trackingNumber}`,
-                lastUpdated: new Date()
-            }
-        };
-    }
-};
-exports.simulateDelivery = simulateDelivery;
 //# sourceMappingURL=trackingUtils.js.map

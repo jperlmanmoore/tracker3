@@ -3,10 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.testFedExAPI = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const User_1 = __importDefault(require("../models/User"));
+const fedexApi_1 = require("../utils/fedexApi");
 dotenv_1.default.config();
 const connectDB = async () => {
     try {
@@ -19,9 +20,34 @@ const connectDB = async () => {
         process.exit(1);
     }
 };
+const testFedExAPI = async () => {
+    try {
+        console.log('🔍 Testing FedEx API Integration with enhanced debugging...');
+        const testTrackingNumbers = [
+            '771234567890',
+            '612909123456789',
+            '986578788855'
+        ];
+        for (const trackingNumber of testTrackingNumbers) {
+            console.log(`\n📦 Testing tracking number: ${trackingNumber}`);
+            try {
+                const result = await (0, fedexApi_1.checkFedExDeliveryStatus)(trackingNumber);
+                console.log(`✅ Result for ${trackingNumber}:`, JSON.stringify(result, null, 2));
+            }
+            catch (error) {
+                console.log(`❌ Error for ${trackingNumber}:`, error.message);
+            }
+        }
+    }
+    catch (error) {
+        console.error('❌ Error testing FedEx API:', error);
+    }
+};
+exports.testFedExAPI = testFedExAPI;
 const seedTestUser = async () => {
     try {
         await connectDB();
+        await testFedExAPI();
         const existingUser = await User_1.default.findOne({ email: 'test@mailtracker.com' });
         if (existingUser) {
             console.log('Test user already exists!');
@@ -29,12 +55,10 @@ const seedTestUser = async () => {
             console.log('Password: password123');
             process.exit(0);
         }
-        const salt = await bcryptjs_1.default.genSalt(10);
-        const hashedPassword = await bcryptjs_1.default.hash('password123', salt);
         const testUser = new User_1.default({
             username: 'testuser',
             email: 'test@mailtracker.com',
-            password: hashedPassword,
+            password: 'password123',
             firstName: 'Test',
             lastName: 'User'
         });
@@ -55,5 +79,7 @@ const seedTestUser = async () => {
         process.exit(0);
     }
 };
-seedTestUser();
+if (require.main === module) {
+    seedTestUser();
+}
 //# sourceMappingURL=seedTestUser.js.map

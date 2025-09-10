@@ -3,11 +3,40 @@ import { ProofOfDelivery } from '../types/package';
 import * as xml2js from 'xml2js';
 import * as dotenv from 'dotenv';
 dotenv.config();
+/**
+ * Fetch FedEx SPOD PDF for a delivered package
+ * Returns PDF as base64 or URL
+ */
+export const fetchFedExSpodPdf = async (trackingNumber: string): Promise<{ pdfUrl?: string; pdfBase64?: string }> => {
+  // Simulated: In production, call FedEx SPOD API here
+  // Example: return { pdfUrl: `https://www.fedex.com/spod/${trackingNumber}.pdf` };
+  // For now, return a placeholder URL
+  return {
+    pdfUrl: `https://www.fedex.com/spod/${trackingNumber}.pdf`
+    // pdfBase64 omitted if not available
+  };
+};
+
+/**
+ * Fetch FedEx PPOD photo for a delivered package
+ * Returns photo as URL or base64
+ */
+export const fetchFedExPpodPhoto = async (trackingNumber: string): Promise<{ photoUrl?: string; photoBase64?: string }> => {
+  // Simulated: In production, call FedEx PPOD API here
+  // Example: return { photoUrl: `https://www.fedex.com/ppod/${trackingNumber}.jpg` };
+  // For now, return a placeholder URL
+  return {
+    photoUrl: `https://www.fedex.com/ppod/${trackingNumber}.jpg`
+    // photoBase64 omitted if not available
+  };
+};
+
 
 // FedEx Web Services Configuration
 const FEDEX_API_KEY = process.env.FEDEX_API_KEY;
 const FEDEX_API_SECRET = process.env.FEDEX_API_SECRET;
 const FEDEX_API_BASE_URL = process.env.FEDEX_API_BASE_URL || 'https://ws.fedex.com';
+const FEDEX_ACCOUNT_NUMBER = process.env.FEDEX_ACCOUNT_NUMBER;
 
 // Cache for access token
 let accessToken: string | null = null;
@@ -59,7 +88,7 @@ const createTrackingSOAPRequest = (trackingNumber: string): string => {
       </v16:UserCredential>
     </v16:WebAuthenticationDetail>
     <v16:ClientDetail>
-      <v16:AccountNumber>510087780</v16:AccountNumber>
+      <v16:AccountNumber>${FEDEX_ACCOUNT_NUMBER || '510087780'}</v16:AccountNumber>
       <v16:MeterNumber>119009840</v16:MeterNumber>
     </v16:ClientDetail>
   </soapenv:Header>
@@ -72,7 +101,7 @@ const createTrackingSOAPRequest = (trackingNumber: string): string => {
         </v16:UserCredential>
       </v16:WebAuthenticationDetail>
       <v16:ClientDetail>
-        <v16:AccountNumber>510087780</v16:AccountNumber>
+        <v16:AccountNumber>${FEDEX_ACCOUNT_NUMBER || '510087780'}</v16:AccountNumber>
         <v16:MeterNumber>119009840</v16:MeterNumber>
       </v16:ClientDetail>
       <v16:TransactionDetail>
@@ -113,7 +142,7 @@ const createSPODSOAPRequest = (trackingNumber: string): string => {
       </v16:UserCredential>
     </v16:WebAuthenticationDetail>
     <v16:ClientDetail>
-      <v16:AccountNumber>510087780</v16:AccountNumber>
+      <v16:AccountNumber>${FEDEX_ACCOUNT_NUMBER || '510087780'}</v16:AccountNumber>
       <v16:MeterNumber>119009840</v16:MeterNumber>
     </v16:ClientDetail>
   </soapenv:Header>
@@ -126,7 +155,7 @@ const createSPODSOAPRequest = (trackingNumber: string): string => {
         </v16:UserCredential>
       </v16:WebAuthenticationDetail>
       <v16:ClientDetail>
-        <v16:AccountNumber>510087780</v16:AccountNumber>
+        <v16:AccountNumber>${FEDEX_ACCOUNT_NUMBER || '510087780'}</v16:AccountNumber>
         <v16:MeterNumber>119009840</v16:MeterNumber>
       </v16:ClientDetail>
       <v16:TransactionDetail>
@@ -160,6 +189,8 @@ const fetchFedExTracking = async (trackingNumber: string, includeSPOD: boolean =
   await getFedExAccessToken(); // Ensure credentials are available
   const soapRequest = includeSPOD ? createSPODSOAPRequest(trackingNumber) : createTrackingSOAPRequest(trackingNumber);
 
+  console.log(`📤 FedEx SOAP Request for ${trackingNumber}:`, soapRequest);
+
   try {
     const response: AxiosResponse<string> = await axios.post(
       `${FEDEX_API_BASE_URL}/web-services/track`,
@@ -173,6 +204,9 @@ const fetchFedExTracking = async (trackingNumber: string, includeSPOD: boolean =
       }
     );
 
+    console.log(`📥 FedEx SOAP Response Status for ${trackingNumber}:`, response.status);
+    console.log(`📥 FedEx SOAP Response Data for ${trackingNumber}:`, response.data);
+
     // Parse SOAP response using xml2js
     const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: true });
     const result = await parser.parseStringPromise(response.data);
@@ -185,7 +219,7 @@ const fetchFedExTracking = async (trackingNumber: string, includeSPOD: boolean =
 
     return result;
   } catch (error: any) {
-    console.error('FedEx Web Services error:', error.response?.data || error.message);
+    console.error('❌ FedEx Web Services error:', error.response?.data || error.message);
     throw new Error(`Failed to fetch FedEx tracking data for ${trackingNumber}`);
   }
 };
@@ -197,6 +231,16 @@ const extractPodFromFedExSOAPResponse = (xmlResult: any, trackingNumber: string)
   const pod: ProofOfDelivery = {
     lastUpdated: new Date()
   };
+
+  // Fetch SPOD PDF and PPOD photo (simulated)
+  fetchFedExSpodPdf(trackingNumber).then(spod => {
+    if (spod.pdfUrl) pod.spodPdfUrl = spod.pdfUrl;
+    if (spod.pdfBase64) pod.spodPdfBase64 = spod.pdfBase64;
+  });
+  fetchFedExPpodPhoto(trackingNumber).then(ppod => {
+    if (ppod.photoUrl) pod.deliveryPhoto = ppod.photoUrl;
+    if (ppod.photoBase64) pod.deliveryPhoto = ppod.photoBase64;
+  });
 
   try {
     // Navigate to the TrackReply in the SOAP response
@@ -330,22 +374,56 @@ export const checkFedExDeliveryStatus = async (trackingNumber: string): Promise<
   pod?: ProofOfDelivery;
 }> => {
   try {
-    const xmlResult = await fetchFedExTracking(trackingNumber, false);
-    const envelope = xmlResult['soapenv:Envelope'];
-    const body = envelope?.['soapenv:Body'];
-    const trackReply = body?.['TrackReply'];
+    console.log(`🔍 Checking FedEx delivery status for ${trackingNumber}`);
 
-    if (!trackReply) {
+    const xmlResult = await fetchFedExTracking(trackingNumber, false);
+    console.log(`📄 FedEx API Raw Response for ${trackingNumber}:`, JSON.stringify(xmlResult, null, 2));
+
+    // Parse SOAP response - handle the actual structure
+    const envelope = xmlResult['soapenv:Envelope'];
+    if (!envelope) {
+      console.log(`❌ No SOAP envelope found in FedEx response for ${trackingNumber}`);
       return { isDelivered: false };
+    }
+
+    const body = envelope['soapenv:Body'];
+    if (!body) {
+      console.log(`❌ No SOAP body found in FedEx response for ${trackingNumber}`);
+      return { isDelivered: false };
+    }
+
+    const trackReply = body['TrackReply'];
+    if (!trackReply) {
+      console.log(`❌ No TrackReply found in FedEx response for ${trackingNumber}`);
+      return { isDelivered: false };
+    }
+
+    // Check for notifications/errors
+    const notifications = trackReply['Notifications'];
+    if (notifications) {
+      console.log(`📢 FedEx Notifications for ${trackingNumber}:`, JSON.stringify(notifications, null, 2));
+      // If authentication failed, just return not delivered
+      const message = notifications['Message'] || notifications['v16:Message'];
+      if (message === 'Authentication Failed') {
+        console.log(`🔄 FedEx API authentication failed for ${trackingNumber}`);
+        return { isDelivered: false };
+      }
     }
 
     const trackDetails = trackReply['TrackDetails'];
     if (!trackDetails) {
+      console.log(`❌ No TrackDetails found in FedEx response for ${trackingNumber}`);
       return { isDelivered: false };
     }
 
     const deliveryTimestamp = trackDetails['ActualDeliveryTimestamp'];
     const isDelivered = !!deliveryTimestamp;
+
+    console.log(`📊 FedEx Status for ${trackingNumber}:`, {
+      deliveryTimestamp,
+      isDelivered,
+      trackDetails: JSON.stringify(trackDetails, null, 2)
+    });
 
     let deliveryDate: Date | undefined;
     let pod: ProofOfDelivery | undefined;
@@ -362,10 +440,11 @@ export const checkFedExDeliveryStatus = async (trackingNumber: string): Promise<
     };
 
   } catch (error: any) {
-    console.error(`Error checking FedEx delivery status for ${trackingNumber}:`, error.message);
+    console.error(`❌ Error checking FedEx delivery status for ${trackingNumber}:`, error.message);
     return { isDelivered: false };
   }
 };
+
 
 /**
  * Get detailed tracking history from FedEx

@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import User from '../models/User';
+import { checkFedExDeliveryStatus } from '../utils/fedexApi';
 
 // Load environment variables
 dotenv.config();
@@ -18,14 +18,43 @@ const connectDB = async (): Promise<void> => {
   }
 };
 
+const testFedExAPI = async (): Promise<void> => {
+  try {
+    console.log('🔍 Testing FedEx API Integration with enhanced debugging...');
+
+    // Test with a known FedEx tracking number format
+    const testTrackingNumbers = [
+      '771234567890', // Test tracking number
+      '612909123456789', // FedEx Express
+      '986578788855' // FedEx Ground
+    ];
+
+    for (const trackingNumber of testTrackingNumbers) {
+      console.log(`\n📦 Testing tracking number: ${trackingNumber}`);
+      try {
+        const result = await checkFedExDeliveryStatus(trackingNumber);
+        console.log(`✅ Result for ${trackingNumber}:`, JSON.stringify(result, null, 2));
+      } catch (error: any) {
+        console.log(`❌ Error for ${trackingNumber}:`, error.message);
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Error testing FedEx API:', error);
+  }
+};
+
 const seedTestUser = async (): Promise<void> => {
   try {
     // Connect to database
     await connectDB();
-    
+
+    // Test FedEx API first
+    await testFedExAPI();
+
     // Check if test user already exists
     const existingUser = await User.findOne({ email: 'test@mailtracker.com' });
-    
+
     if (existingUser) {
       console.log('Test user already exists!');
       console.log('Email: test@mailtracker.com');
@@ -33,15 +62,11 @@ const seedTestUser = async (): Promise<void> => {
       process.exit(0);
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('password123', salt);
-
-    // Create test user
+    // Create test user (don't pre-hash password - let the model handle it)
     const testUser = new User({
       username: 'testuser',
       email: 'test@mailtracker.com',
-      password: hashedPassword,
+      password: 'password123', // Plain text - model will hash it
       firstName: 'Test',
       lastName: 'User'
     });
@@ -64,4 +89,9 @@ const seedTestUser = async (): Promise<void> => {
   }
 };
 
-seedTestUser();
+// If this script is run directly, run the test
+if (require.main === module) {
+  seedTestUser();
+}
+
+export { testFedExAPI };
