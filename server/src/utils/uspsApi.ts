@@ -108,8 +108,8 @@ export const getUSPSTrackingHistory = async (trackingNumber: string): Promise<Ar
     console.log(`Getting USPS tracking history for ${trackingNumber}`);
 
     if (!USPS_USER_ID) {
-      console.log('USPS_USER_ID not configured, returning simulated history');
-      return simulateUSPSTrackingHistoryForTesting(trackingNumber);
+      console.log('USPS_USER_ID not configured.');
+      return [];
     }
 
     // USPS Web Tools API URL
@@ -135,13 +135,13 @@ export const getUSPSTrackingHistory = async (trackingNumber: string): Promise<Ar
     // Check for errors
     if (result.TrackResponse?.Error) {
       console.error(`USPS API Error: ${result.TrackResponse.Error.Description}`);
-      return simulateUSPSTrackingHistoryForTesting(trackingNumber);
+      return [];
     }
 
     // Get track info
     const trackInfo = result.TrackResponse?.TrackInfo;
     if (!trackInfo) {
-      return simulateUSPSTrackingHistoryForTesting(trackingNumber);
+      return [];
     }
 
     // Get track details
@@ -187,47 +187,6 @@ export const getUSPSTrackingHistory = async (trackingNumber: string): Promise<Ar
 
   } catch (error: any) {
     console.error(`Error getting USPS tracking history for ${trackingNumber}:`, error.message);
-    return simulateUSPSTrackingHistoryForTesting(trackingNumber);
+    return [];
   }
-};
-
-/**
- * Simulate USPS tracking history for testing purposes
- */
-const simulateUSPSTrackingHistoryForTesting = (trackingNumber: string): Array<{
-  date: Date;
-  status: string;
-  location?: string;
-  description?: string;
-}> => {
-  const history = [];
-  const now = new Date();
-
-  // Create a few tracking events
-  const events = [
-    { status: 'Accepted at USPS Origin Facility', location: 'Origin City, ST', daysAgo: 3 },
-    { status: 'Arrived at USPS Facility', location: 'Transit City, ST', daysAgo: 2 },
-    { status: 'Out for Delivery', location: 'Delivery City, ST', daysAgo: 1 },
-  ];
-
-  // Add delivery event if tracking number ends with odd number
-  const lastDigit = parseInt(trackingNumber.slice(-1));
-  if (lastDigit % 2 !== 0) {
-    events.push({ status: 'Delivered', location: 'Delivery Address', daysAgo: 0 });
-  }
-
-  for (const event of events) {
-    const eventDate = new Date(now);
-    eventDate.setDate(eventDate.getDate() - event.daysAgo);
-
-    history.push({
-      date: eventDate,
-      status: event.status,
-      location: event.location,
-      description: event.status
-    });
-  }
-
-  console.log(`📋 Simulated USPS tracking history for ${trackingNumber}:`, history.length, 'events');
-  return history;
 };

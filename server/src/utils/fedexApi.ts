@@ -8,13 +8,8 @@ dotenv.config();
  * Returns PDF as base64 or URL
  */
 export const fetchFedExSpodPdf = async (trackingNumber: string): Promise<{ pdfUrl?: string; pdfBase64?: string }> => {
-  // Simulated: In production, call FedEx SPOD API here
-  // Example: return { pdfUrl: `https://www.fedex.com/spod/${trackingNumber}.pdf` };
-  // For now, return a placeholder URL
-  return {
-    pdfUrl: `https://www.fedex.com/spod/${trackingNumber}.pdf`
-    // pdfBase64 omitted if not available
-  };
+  // TODO: Implement FedEx SPOD PDF retrieval
+  return {};
 };
 
 /**
@@ -22,13 +17,9 @@ export const fetchFedExSpodPdf = async (trackingNumber: string): Promise<{ pdfUr
  * Returns photo as URL or base64
  */
 export const fetchFedExPpodPhoto = async (trackingNumber: string): Promise<{ photoUrl?: string; photoBase64?: string }> => {
-  // Simulated: In production, call FedEx PPOD API here
-  // Example: return { photoUrl: `https://www.fedex.com/ppod/${trackingNumber}.jpg` };
-  // For now, return a placeholder URL
-  return {
-    photoUrl: `https://www.fedex.com/ppod/${trackingNumber}.jpg`
-    // photoBase64 omitted if not available
-  };
+  // TODO: Implement FedEx PPOD photo retrieval
+  // For now, return empty - no simulated data
+  return {};
 };
 
 
@@ -63,7 +54,7 @@ const getFedExAccessToken = async (): Promise<string> => {
   try {
     // For FedEx Web Services, we use API Key/Secret directly in SOAP headers
     // No OAuth2 token needed - authentication is per request
-    accessToken = 'fedex_ws_token'; // Placeholder - actual auth is in SOAP headers
+    accessToken = 'fedex_ws_token';
     tokenExpiry = new Date(Date.now() + 3600000); // 1 hour expiry
 
     return accessToken;
@@ -232,7 +223,7 @@ const extractPodFromFedExSOAPResponse = (xmlResult: any, trackingNumber: string)
     lastUpdated: new Date()
   };
 
-  // Fetch SPOD PDF and PPOD photo (simulated)
+  // Fetch SPOD PDF and PPOD photo
   fetchFedExSpodPdf(trackingNumber).then(spod => {
     if (spod.pdfUrl) pod.spodPdfUrl = spod.pdfUrl;
     if (spod.pdfBase64) pod.spodPdfBase64 = spod.pdfBase64;
@@ -349,19 +340,7 @@ export const getFedExPod = async (trackingNumber: string): Promise<ProofOfDelive
 
   } catch (error: any) {
     console.error(`Error fetching FedEx SPOD for ${trackingNumber}:`, error.message);
-
-    // Return a basic POD structure if API fails
-    return {
-      deliveredTo: 'Recipient',
-      deliveryLocation: 'Delivery Address',
-      signatureRequired: false,
-      signatureObtained: false,
-      signedBy: '',
-      deliveryPhoto: '',
-      deliveryInstructions: 'Package delivered successfully',
-      proofOfDeliveryUrl: `https://www.fedex.com/en-us/tracking.html?tracknumbers=${trackingNumber}`,
-      lastUpdated: new Date()
-    };
+    throw error; // Re-throw error instead of returning simulated data
   }
 };
 
