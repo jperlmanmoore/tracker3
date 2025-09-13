@@ -153,6 +153,8 @@ const createSPODSOAPRequest = (trackingNumber: string): string => {
         <v16:CustomerTransactionId>SPOD Request</v16:CustomerTransactionId>
       </v16:TransactionDetail>
       <v16:Version>
+      // TEMP LOGGING: Output raw FedEx API response for debugging
+      console.log('FedEx API raw response:', response.data);
         <v16:ServiceId>trck</v16:ServiceId>
         <v16:Major>16</v16:Major>
         <v16:Intermediate>0</v16:Intermediate>
@@ -194,6 +196,9 @@ const fetchFedExTracking = async (trackingNumber: string, includeSPOD: boolean =
         },
       }
     );
+
+    // Add this line here to log the raw API response
+    console.log('FedEx API Response:', JSON.stringify(response.data, null, 2));
 
     console.log(`📥 FedEx SOAP Response Status for ${trackingNumber}:`, response.status);
     console.log(`📥 FedEx SOAP Response Data for ${trackingNumber}:`, response.data);
@@ -362,7 +367,7 @@ export const checkFedExDeliveryStatus = async (trackingNumber: string): Promise<
     const envelope = xmlResult['soapenv:Envelope'];
     if (!envelope) {
       console.log(`❌ No SOAP envelope found in FedEx response for ${trackingNumber}`);
-      return { isDelivered: false };
+      //return { isDelivered: false };
     }
 
     const body = envelope['soapenv:Body'];
@@ -383,10 +388,10 @@ export const checkFedExDeliveryStatus = async (trackingNumber: string): Promise<
       console.log(`📢 FedEx Notifications for ${trackingNumber}:`, JSON.stringify(notifications, null, 2));
       // If authentication failed, just return not delivered
       const message = notifications['Message'] || notifications['v16:Message'];
-      if (message === 'Authentication Failed') {
-        console.log(`🔄 FedEx API authentication failed for ${trackingNumber}`);
-        return { isDelivered: false };
-      }
+        if (message === 'Authentication Failed') {
+          console.log(`🔄 FedEx API authentication failed for ${trackingNumber}`);
+          throw new Error(`FedEx API authentication failed for ${trackingNumber}`);
+        }
     }
 
     const trackDetails = trackReply['TrackDetails'];
@@ -422,6 +427,7 @@ export const checkFedExDeliveryStatus = async (trackingNumber: string): Promise<
     console.error(`❌ Error checking FedEx delivery status for ${trackingNumber}:`, error.message);
     return { isDelivered: false };
   }
+
 };
 
 
