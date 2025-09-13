@@ -72,6 +72,9 @@ router.get('/', auth_1.authenticateToken, async (req, res) => {
             Package_1.default.countDocuments(filter)
         ]);
         const totalPages = Math.ceil(total / limit);
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         res.json({
             success: true,
             data: {
@@ -254,6 +257,9 @@ router.get('/grouped', auth_1.authenticateToken, async (req, res) => {
             { $sort: { _id: 1 } }
         ]);
         console.log('Grouped Packages:', groupedPackages);
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         res.json({
             success: true,
             data: groupedPackages
@@ -279,6 +285,9 @@ router.get('/:id', auth_1.authenticateToken, async (req, res) => {
             });
             return;
         }
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         res.json({
             success: true,
             data: pkg
@@ -463,6 +472,9 @@ router.post('/:id/refresh', auth_1.authenticateToken, async (req, res) => {
         if (updatedStatus === 'Delivered' && deliveryDate && pkg.deliveryDate && !pkg.spodEmailSent) {
             await sendPodEmailsIfConfigured(pkg, userId);
         }
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         res.json({
             success: true,
             message: 'Package tracking refreshed successfully',

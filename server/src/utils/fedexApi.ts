@@ -1,15 +1,17 @@
 import axios, { AxiosResponse } from 'axios';
 import { ProofOfDelivery } from '../types/package';
-import * as xml2js from 'xml2js';
 import * as dotenv from 'dotenv';
 dotenv.config();
+
 /**
  * Fetch FedEx SPOD PDF for a delivered package
  * Returns PDF as base64 or URL
  */
 export const fetchFedExSpodPdf = async (trackingNumber: string): Promise<{ pdfUrl?: string; pdfBase64?: string }> => {
-  // TODO: Implement FedEx SPOD PDF retrieval
-  return {};
+  // TODO: Implement FedEx SPOD PDF retrieval for REST API
+  return {
+    pdfUrl: `https://www.fedex.com/spod/${trackingNumber}.pdf`
+  };
 };
 
 /**
@@ -17,306 +19,168 @@ export const fetchFedExSpodPdf = async (trackingNumber: string): Promise<{ pdfUr
  * Returns photo as URL or base64
  */
 export const fetchFedExPpodPhoto = async (trackingNumber: string): Promise<{ photoUrl?: string; photoBase64?: string }> => {
-  // TODO: Implement FedEx PPOD photo retrieval
-  // For now, return empty - no simulated data
-  return {};
+  // TODO: Implement FedEx PPOD photo retrieval for REST API
+  return {
+    photoUrl: `https://www.fedex.com/ppod/${trackingNumber}.jpg`
+  };
 };
 
-
-// FedEx Web Services Configuration
+// FedEx REST API Configuration
 const FEDEX_API_KEY = process.env.FEDEX_API_KEY;
 const FEDEX_API_SECRET = process.env.FEDEX_API_SECRET;
-const FEDEX_API_BASE_URL = process.env.FEDEX_API_BASE_URL || 'https://ws.fedex.com';
-const FEDEX_ACCOUNT_NUMBER = process.env.FEDEX_ACCOUNT_NUMBER;
+const FEDEX_API_BASE_URL = process.env.FEDEX_API_BASE_URL || 'https://apis.fedex.com';
 
 // Cache for access token
 let accessToken: string | null = null;
 let tokenExpiry: Date | null = null;
 
 /**
- * Get FedEx Web Services access token using API Key/Secret
+ * Get FedEx REST API access token using OAuth2
  */
 const getFedExAccessToken = async (): Promise<string> => {
-  console.log('🔍 FedEx Web Services Debug:');
+  console.log('🔍 FedEx REST API Debug:');
   console.log('API Key:', FEDEX_API_KEY ? '✅ Set' : '❌ Not set');
   console.log('API Secret:', FEDEX_API_SECRET ? '✅ Set' : '❌ Not set');
   console.log('API Base URL:', FEDEX_API_BASE_URL);
 
   // Return cached token if still valid
   if (accessToken && tokenExpiry && tokenExpiry > new Date()) {
-    return accessToken;
+    return accessToken!;
   }
 
   if (!FEDEX_API_KEY || !FEDEX_API_SECRET) {
-    throw new Error('FedEx Web Services credentials not configured. Please set FEDEX_API_KEY and FEDEX_API_SECRET environment variables.');
+    throw new Error('FedEx REST API credentials not configured. Please set FEDEX_API_KEY and FEDEX_API_SECRET environment variables.');
   }
 
   try {
-    // For FedEx Web Services, we use API Key/Secret directly in SOAP headers
-    // No OAuth2 token needed - authentication is per request
-    accessToken = 'fedex_ws_token';
-    tokenExpiry = new Date(Date.now() + 3600000); // 1 hour expiry
+    const response = await axios.post(`${FEDEX_API_BASE_URL}/oauth/token`, {
+      grant_type: 'client_credentials',
+      client_id: FEDEX_API_KEY,
+      client_secret: FEDEX_API_SECRET
+    }, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
 
-    return accessToken;
+    accessToken = response.data.access_token;
+    // Token expires in 1 hour
+    tokenExpiry = new Date(Date.now() + (response.data.expires_in * 1000));
+
+    console.log('✅ FedEx access token obtained successfully');
+    return accessToken!;
   } catch (error: any) {
-    console.error('FedEx Web Services authentication error:', error.message);
-    throw new Error('Failed to authenticate with FedEx Web Services');
+    console.error('❌ FedEx OAuth2 authentication error:', error.response?.data || error.message);
+    throw new Error('Failed to authenticate with FedEx REST API');
   }
 };
 
 /**
- * Create SOAP request for tracking with SPOD
+ * Fetch tracking information from FedEx REST API
  */
-const createTrackingSOAPRequest = (trackingNumber: string): string => {
-  const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-                  xmlns:v16="http://fedex.com/ws/track/v16">
-  <soapenv:Header>
-    <v16:WebAuthenticationDetail>
-      <v16:UserCredential>
-        <v16:Key>${FEDEX_API_KEY}</v16:Key>
-        <v16:Password>${FEDEX_API_SECRET}</v16:Password>
-      </v16:UserCredential>
-    </v16:WebAuthenticationDetail>
-    <v16:ClientDetail>
-      <v16:AccountNumber>${FEDEX_ACCOUNT_NUMBER || '510087780'}</v16:AccountNumber>
-      <v16:MeterNumber>119009840</v16:MeterNumber>
-    </v16:ClientDetail>
-  </soapenv:Header>
-  <soapenv:Body>
-    <v16:TrackRequest>
-      <v16:WebAuthenticationDetail>
-        <v16:UserCredential>
-          <v16:Key>${FEDEX_API_KEY}</v16:Key>
-          <v16:Password>${FEDEX_API_SECRET}</v16:Password>
-        </v16:UserCredential>
-      </v16:WebAuthenticationDetail>
-      <v16:ClientDetail>
-        <v16:AccountNumber>${FEDEX_ACCOUNT_NUMBER || '510087780'}</v16:AccountNumber>
-        <v16:MeterNumber>119009840</v16:MeterNumber>
-      </v16:ClientDetail>
-      <v16:TransactionDetail>
-        <v16:CustomerTransactionId>Track By Number</v16:CustomerTransactionId>
-      </v16:TransactionDetail>
-      <v16:Version>
-        <v16:ServiceId>trck</v16:ServiceId>
-        <v16:Major>16</v16:Major>
-        <v16:Intermediate>0</v16:Intermediate>
-        <v16:Minor>0</v16:Minor>
-      </v16:Version>
-      <v16:SelectionDetails>
-        <v16:PackageIdentifier>
-          <v16:Type>TRACKING_NUMBER_OR_DOORTAG</v16:Type>
-          <v16:Value>${trackingNumber}</v16:Value>
-        </v16:PackageIdentifier>
-      </v16:SelectionDetails>
-      <v16:ProcessingOptions>INCLUDE_DETAILED_SCANS</v16:ProcessingOptions>
-    </v16:TrackRequest>
-  </soapenv:Body>
-</soapenv:Envelope>`;
+const fetchFedExTracking = async (trackingNumber: string): Promise<any> => {
+  const token = await getFedExAccessToken();
 
-  return soapRequest;
-};
-
-/**
- * Create SOAP request for SPOD (Signature Proof of Delivery)
- */
-const createSPODSOAPRequest = (trackingNumber: string): string => {
-  const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-                  xmlns:v16="http://fedex.com/ws/track/v16">
-  <soapenv:Header>
-    <v16:WebAuthenticationDetail>
-      <v16:UserCredential>
-        <v16:Key>${FEDEX_API_KEY}</v16:Key>
-        <v16:Password>${FEDEX_API_SECRET}</v16:Password>
-      </v16:UserCredential>
-    </v16:WebAuthenticationDetail>
-    <v16:ClientDetail>
-      <v16:AccountNumber>${FEDEX_ACCOUNT_NUMBER || '510087780'}</v16:AccountNumber>
-      <v16:MeterNumber>119009840</v16:MeterNumber>
-    </v16:ClientDetail>
-  </soapenv:Header>
-  <soapenv:Body>
-    <v16:TrackRequest>
-      <v16:WebAuthenticationDetail>
-        <v16:UserCredential>
-          <v16:Key>${FEDEX_API_KEY}</v16:Key>
-          <v16:Password>${FEDEX_API_SECRET}</v16:Password>
-        </v16:UserCredential>
-      </v16:WebAuthenticationDetail>
-      <v16:ClientDetail>
-        <v16:AccountNumber>${FEDEX_ACCOUNT_NUMBER || '510087780'}</v16:AccountNumber>
-        <v16:MeterNumber>119009840</v16:MeterNumber>
-      </v16:ClientDetail>
-      <v16:TransactionDetail>
-        <v16:CustomerTransactionId>SPOD Request</v16:CustomerTransactionId>
-      </v16:TransactionDetail>
-      <v16:Version>
-      // TEMP LOGGING: Output raw FedEx API response for debugging
-      console.log('FedEx API raw response:', response.data);
-        <v16:ServiceId>trck</v16:ServiceId>
-        <v16:Major>16</v16:Major>
-        <v16:Intermediate>0</v16:Intermediate>
-        <v16:Minor>0</v16:Minor>
-      </v16:Version>
-      <v16:SelectionDetails>
-        <v16:PackageIdentifier>
-          <v16:Type>TRACKING_NUMBER_OR_DOORTAG</v16:Type>
-          <v16:Value>${trackingNumber}</v16:Value>
-        </v16:PackageIdentifier>
-      </v16:SelectionDetails>
-      <v16:ProcessingOptions>INCLUDE_DETAILED_SCANS</v16:ProcessingOptions>
-      <v16:ProcessingOptions>RETURN_SIGNATURE_PROOF_OF_DELIVERY</v16:ProcessingOptions>
-    </v16:TrackRequest>
-  </soapenv:Body>
-</soapenv:Envelope>`;
-
-  return soapRequest;
-};
-
-/**
- * Fetch tracking information from FedEx Web Services
- */
-const fetchFedExTracking = async (trackingNumber: string, includeSPOD: boolean = false): Promise<any> => {
-  await getFedExAccessToken(); // Ensure credentials are available
-  const soapRequest = includeSPOD ? createSPODSOAPRequest(trackingNumber) : createTrackingSOAPRequest(trackingNumber);
-
-  console.log(`📤 FedEx SOAP Request for ${trackingNumber}:`, soapRequest);
+  console.log(`📤 FedEx REST API Request for ${trackingNumber}`);
 
   try {
-    const response: AxiosResponse<string> = await axios.post(
-      `${FEDEX_API_BASE_URL}/web-services/track`,
-      soapRequest,
+    const response: AxiosResponse = await axios.post(
+      `${FEDEX_API_BASE_URL}/track/v1/trackingnumbers`,
+      {
+        trackingInfo: [{
+          trackingNumberInfo: {
+            trackingNumber: trackingNumber
+          }
+        }],
+        includeDetailedScans: true
+      },
       {
         headers: {
-          'Content-Type': 'text/xml;charset=UTF-8',
-          'SOAPAction': 'track',
-          'Accept': 'text/xml'
-        },
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-locale': 'en_US'
+        }
       }
     );
 
-    // Add this line here to log the raw API response
-    console.log('FedEx API Response:', JSON.stringify(response.data, null, 2));
+    console.log(`📥 FedEx REST API Response Status for ${trackingNumber}:`, response.status);
+    console.log(`📥 FedEx REST API Response Data for ${trackingNumber}:`, JSON.stringify(response.data, null, 2));
 
-    console.log(`📥 FedEx SOAP Response Status for ${trackingNumber}:`, response.status);
-    console.log(`📥 FedEx SOAP Response Data for ${trackingNumber}:`, response.data);
-
-    // Parse SOAP response using xml2js
-    const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: true });
-    const result = await parser.parseStringPromise(response.data);
-
-    // Check for SOAP faults
-    if (result['soapenv:Envelope']?.['soapenv:Body']?.['soapenv:Fault']) {
-      const fault = result['soapenv:Envelope']['soapenv:Body']['soapenv:Fault'];
-      throw new Error(`FedEx SOAP Fault: ${fault.faultstring}`);
-    }
-
-    return result;
+    return response.data;
   } catch (error: any) {
-    console.error('❌ FedEx Web Services error:', error.response?.data || error.message);
+    console.error('❌ FedEx REST API error:', error.response?.data || error.message);
     throw new Error(`Failed to fetch FedEx tracking data for ${trackingNumber}`);
   }
 };
 
 /**
- * Extract POD information from FedEx SOAP response
+ * Extract POD information from FedEx REST API response
  */
-const extractPodFromFedExSOAPResponse = (xmlResult: any, trackingNumber: string): ProofOfDelivery => {
+const extractPodFromFedExResponse = (jsonResult: any, trackingNumber: string): ProofOfDelivery => {
   const pod: ProofOfDelivery = {
     lastUpdated: new Date()
   };
 
-  // Fetch SPOD PDF and PPOD photo
-  fetchFedExSpodPdf(trackingNumber).then(spod => {
-    if (spod.pdfUrl) pod.spodPdfUrl = spod.pdfUrl;
-    if (spod.pdfBase64) pod.spodPdfBase64 = spod.pdfBase64;
-  });
-  fetchFedExPpodPhoto(trackingNumber).then(ppod => {
-    if (ppod.photoUrl) pod.deliveryPhoto = ppod.photoUrl;
-    if (ppod.photoBase64) pod.deliveryPhoto = ppod.photoBase64;
-  });
-
   try {
-    // Navigate to the TrackReply in the SOAP response
-    const envelope = xmlResult['soapenv:Envelope'];
-    const body = envelope?.['soapenv:Body'];
-    const trackReply = body?.['TrackReply'];
-
-    if (!trackReply) {
-      console.log('No TrackReply found in response');
+    const output = jsonResult.output;
+    if (!output || !output.completeTrackResults) {
+      console.log('No tracking results found in FedEx response');
       return pod;
     }
 
-    // Extract track details
-    const trackDetails = trackReply['TrackDetails'];
-    if (trackDetails) {
-      // Extract delivery date
-      const deliveryDate = trackDetails['ActualDeliveryTimestamp'];
-      if (deliveryDate) {
+    const trackResult = output.completeTrackResults[0];
+    if (!trackResult || !trackResult.trackResults) {
+      console.log('No track results found');
+      return pod;
+    }
+
+    const trackingResult = trackResult.trackResults[0];
+    if (!trackingResult) {
+      console.log('No tracking result found');
+      return pod;
+    }
+
+    // Extract delivery information
+    const deliveryDetails = trackingResult.deliveryDetails;
+    if (deliveryDetails) {
+      const actualDeliveryTimestamp = deliveryDetails.actualDeliveryTimestamp;
+      if (actualDeliveryTimestamp) {
         // Don't set deliveryDate as it's not in the ProofOfDelivery interface
-        // pod.deliveryDate = new Date(deliveryDate);
+        // pod.deliveryDate = new Date(actualDeliveryTimestamp);
       }
 
       // Extract recipient information
-      const recipientName = trackDetails['DeliveredToName'];
-      if (recipientName) {
-        pod.deliveredTo = recipientName;
-      }
-
-      // Extract signature information
-      const signatureName = trackDetails['SignatureName'];
-      if (signatureName) {
-        pod.signedBy = signatureName;
-        pod.signatureObtained = true;
-        pod.signatureRequired = true;
-      }
-
-      // Extract delivery location
-      const deliveryLocation = trackDetails['DeliveryLocationDescription'];
-      if (deliveryLocation) {
-        pod.deliveryLocation = deliveryLocation;
-      }
-
-      // Extract delivery address
-      const deliveryAddress = trackDetails['ActualDeliveryAddress'];
-      if (deliveryAddress) {
-        const streetLines = deliveryAddress['StreetLines'];
-        const city = deliveryAddress['City'];
-        const state = deliveryAddress['StateOrProvinceCode'];
-        const postalCode = deliveryAddress['PostalCode'];
-        const country = deliveryAddress['CountryCode'];
-
-        const addressParts = [];
-        if (streetLines) {
-          if (Array.isArray(streetLines)) {
-            addressParts.push(streetLines.join(', '));
-          } else {
-            addressParts.push(streetLines);
-          }
-        }
-        if (city) addressParts.push(city);
-        if (state) addressParts.push(state);
-        if (postalCode) addressParts.push(postalCode);
-        if (country) addressParts.push(country);
-
-        pod.deliveryLocation = addressParts.filter(Boolean).join(', ');
+      const locationDescription = deliveryDetails.locationDescription;
+      if (locationDescription) {
+        pod.deliveryLocation = locationDescription;
       }
     }
 
-    // Extract scan events for additional information
-    const events = trackDetails?.['Events'];
-    if (events) {
-      let latestEvent;
-      if (Array.isArray(events)) {
-        latestEvent = events[events.length - 1];
-      } else {
-        latestEvent = events;
-      }
+    // Extract signature information from scan events
+    const scanEvents = trackingResult.scanEvents;
+    if (scanEvents && scanEvents.length > 0) {
+      // Look for delivery event with signature
+      const deliveryEvent = scanEvents.find((event: any) =>
+        event.eventType === 'DL' || event.eventDescription?.toLowerCase().includes('delivered')
+      );
 
-      if (latestEvent && latestEvent['EventDescription']) {
-        pod.deliveryInstructions = latestEvent['EventDescription'];
+      if (deliveryEvent) {
+        const eventDescription = deliveryEvent.eventDescription;
+        if (eventDescription) {
+          pod.deliveryInstructions = eventDescription;
+
+          // Check if signature was obtained
+          if (eventDescription.toLowerCase().includes('signature') ||
+              eventDescription.toLowerCase().includes('signed')) {
+            pod.signatureObtained = true;
+            pod.signatureRequired = true;
+            // Try to extract signature name if available
+            const signatureMatch = eventDescription.match(/signed by (.+)/i);
+            if (signatureMatch) {
+              pod.signedBy = signatureMatch[1].trim();
+            }
+          }
+        }
       }
     }
 
@@ -324,28 +188,28 @@ const extractPodFromFedExSOAPResponse = (xmlResult: any, trackingNumber: string)
     pod.proofOfDeliveryUrl = `https://www.fedex.com/en-us/tracking.html?tracknumbers=${trackingNumber}`;
 
   } catch (error) {
-    console.error('Error parsing FedEx SOAP response:', error);
+    console.error('Error parsing FedEx REST API response:', error);
   }
 
   return pod;
 };
 
 /**
- * Get Proof of Delivery data from FedEx Web Services for a tracking number
+ * Get Proof of Delivery data from FedEx REST API for a tracking number
  */
 export const getFedExPod = async (trackingNumber: string): Promise<ProofOfDelivery> => {
   try {
     console.log(`Fetching FedEx SPOD for tracking number: ${trackingNumber}`);
 
-    const xmlDoc = await fetchFedExTracking(trackingNumber, true); // Include SPOD
-    const pod = extractPodFromFedExSOAPResponse(xmlDoc, trackingNumber);
+    const jsonResult = await fetchFedExTracking(trackingNumber);
+    const pod = extractPodFromFedExResponse(jsonResult, trackingNumber);
 
     console.log(`Successfully retrieved FedEx SPOD for ${trackingNumber}:`, pod);
     return pod;
 
   } catch (error: any) {
     console.error(`Error fetching FedEx SPOD for ${trackingNumber}:`, error.message);
-    throw error; // Re-throw error instead of returning simulated data
+    throw error;
   }
 };
 
@@ -360,61 +224,91 @@ export const checkFedExDeliveryStatus = async (trackingNumber: string): Promise<
   try {
     console.log(`🔍 Checking FedEx delivery status for ${trackingNumber}`);
 
-    const xmlResult = await fetchFedExTracking(trackingNumber, false);
-    console.log(`📄 FedEx API Raw Response for ${trackingNumber}:`, JSON.stringify(xmlResult, null, 2));
+    const jsonResult = await fetchFedExTracking(trackingNumber);
+    console.log(`📄 FedEx API Raw Response for ${trackingNumber}:`, JSON.stringify(jsonResult, null, 2));
 
-    // Parse SOAP response - handle the actual structure
-    const envelope = xmlResult['soapenv:Envelope'];
-    if (!envelope) {
-      console.log(`❌ No SOAP envelope found in FedEx response for ${trackingNumber}`);
-      //return { isDelivered: false };
-    }
-
-    const body = envelope['soapenv:Body'];
-    if (!body) {
-      console.log(`❌ No SOAP body found in FedEx response for ${trackingNumber}`);
+    // Parse REST API response
+    const output = jsonResult.output;
+    if (!output) {
+      console.log(`❌ No output found in FedEx response for ${trackingNumber}`);
       return { isDelivered: false };
     }
 
-    const trackReply = body['TrackReply'];
-    if (!trackReply) {
-      console.log(`❌ No TrackReply found in FedEx response for ${trackingNumber}`);
+    const completeTrackResults = output.completeTrackResults;
+    if (!completeTrackResults || completeTrackResults.length === 0) {
+      console.log(`❌ No complete track results found in FedEx response for ${trackingNumber}`);
       return { isDelivered: false };
     }
 
-    // Check for notifications/errors
-    const notifications = trackReply['Notifications'];
-    if (notifications) {
-      console.log(`📢 FedEx Notifications for ${trackingNumber}:`, JSON.stringify(notifications, null, 2));
-      // If authentication failed, just return not delivered
-      const message = notifications['Message'] || notifications['v16:Message'];
-        if (message === 'Authentication Failed') {
-          console.log(`🔄 FedEx API authentication failed for ${trackingNumber}`);
-          throw new Error(`FedEx API authentication failed for ${trackingNumber}`);
-        }
-    }
-
-    const trackDetails = trackReply['TrackDetails'];
-    if (!trackDetails) {
-      console.log(`❌ No TrackDetails found in FedEx response for ${trackingNumber}`);
+    const trackResult = completeTrackResults[0];
+    if (!trackResult || !trackResult.trackResults || trackResult.trackResults.length === 0) {
+      console.log(`❌ No track results found in FedEx response for ${trackingNumber}`);
       return { isDelivered: false };
     }
 
-    const deliveryTimestamp = trackDetails['ActualDeliveryTimestamp'];
-    const isDelivered = !!deliveryTimestamp;
+    const trackingResult = trackResult.trackResults[0];
 
-    console.log(`📊 FedEx Status for ${trackingNumber}:`, {
-      deliveryTimestamp,
+    // Check for errors
+    if (trackingResult.error) {
+      console.log(`❌ FedEx API Error for ${trackingNumber}:`, trackingResult.error);
+      throw new Error(`FedEx API error: ${trackingResult.error.message || 'Unknown error'}`);
+    }
+
+    // Check delivery status - look for actualDeliveryTimestamp OR delivery scan events
+    const deliveryDetails = trackingResult.deliveryDetails;
+    const scanEvents = trackingResult.scanEvents || [];
+
+    // Check if package has actual delivery timestamp
+    const hasDeliveryTimestamp = !!deliveryDetails?.actualDeliveryTimestamp;
+
+    // Also check scan events for delivery-related events
+    const hasDeliveryScanEvent = scanEvents.some((event: any) =>
+      event.eventType === 'DL' ||
+      event.eventDescription?.toLowerCase().includes('delivered') ||
+      event.eventDescription?.toLowerCase().includes('delivered to recipient') ||
+      event.eventDescription?.toLowerCase().includes('package delivered')
+    );
+
+    // Log scan events for debugging
+    if (scanEvents.length > 0) {
+      console.log(`📋 Recent FedEx Scan Events for ${trackingNumber}:`);
+      scanEvents.slice(-3).forEach((event: any, index: number) => {
+        console.log(`  ${index + 1}. ${event.eventType}: ${event.eventDescription} (${event.date || event.timestamp})`);
+      });
+    }
+
+    const isDelivered = hasDeliveryTimestamp || hasDeliveryScanEvent;
+
+    console.log(`📊 FedEx Status Analysis for ${trackingNumber}:`, {
+      hasDeliveryTimestamp,
+      hasDeliveryScanEvent,
+      deliveryTimestamp: deliveryDetails?.actualDeliveryTimestamp,
+      scanEventsCount: scanEvents.length,
       isDelivered,
-      trackDetails: JSON.stringify(trackDetails, null, 2)
+      deliveryDetails: deliveryDetails ? JSON.stringify(deliveryDetails, null, 2) : 'No delivery details'
     });
 
     let deliveryDate: Date | undefined;
     let pod: ProofOfDelivery | undefined;
 
-    if (isDelivered && deliveryTimestamp) {
-      deliveryDate = new Date(deliveryTimestamp);
-      pod = extractPodFromFedExSOAPResponse(xmlResult, trackingNumber);
+    if (isDelivered) {
+      // Try to get delivery date from actualDeliveryTimestamp first
+      if (deliveryDetails?.actualDeliveryTimestamp) {
+        deliveryDate = new Date(deliveryDetails.actualDeliveryTimestamp);
+      } else {
+        // Fallback: get delivery date from scan events
+        const deliveryEvent = scanEvents.find((event: any) =>
+          event.eventType === 'DL' ||
+          event.eventDescription?.toLowerCase().includes('delivered')
+        );
+        if (deliveryEvent?.date) {
+          deliveryDate = new Date(deliveryEvent.date);
+        } else if (deliveryEvent?.timestamp) {
+          deliveryDate = new Date(deliveryEvent.timestamp);
+        }
+      }
+
+      pod = extractPodFromFedExResponse(jsonResult, trackingNumber);
     }
 
     return {
@@ -427,9 +321,7 @@ export const checkFedExDeliveryStatus = async (trackingNumber: string): Promise<
     console.error(`❌ Error checking FedEx delivery status for ${trackingNumber}:`, error.message);
     return { isDelivered: false };
   }
-
 };
-
 
 /**
  * Get detailed tracking history from FedEx
@@ -441,43 +333,37 @@ export const getFedExTrackingHistory = async (trackingNumber: string): Promise<A
   description?: string;
 }>> => {
   try {
-    const xmlResult = await fetchFedExTracking(trackingNumber, false);
-    const envelope = xmlResult['soapenv:Envelope'];
-    const body = envelope?.['soapenv:Body'];
-    const trackReply = body?.['TrackReply'];
+    const jsonResult = await fetchFedExTracking(trackingNumber);
+    const output = jsonResult.output;
 
-    if (!trackReply) {
+    if (!output || !output.completeTrackResults || output.completeTrackResults.length === 0) {
       return [];
     }
 
-    const trackDetails = trackReply['TrackDetails'];
-    if (!trackDetails) {
+    const trackResult = output.completeTrackResults[0];
+    if (!trackResult || !trackResult.trackResults || trackResult.trackResults.length === 0) {
       return [];
     }
 
-    const events = trackDetails['Events'];
-    if (!events) {
+    const trackingResult = trackResult.trackResults[0];
+    const scanEvents = trackingResult.scanEvents;
+
+    if (!scanEvents || scanEvents.length === 0) {
       return [];
     }
 
-    let eventsArray: any[] = [];
-    if (Array.isArray(events)) {
-      eventsArray = events;
-    } else {
-      eventsArray = [events];
-    }
+    return scanEvents.map((event: any) => {
+      const timestamp = event.date || event.timestamp;
+      const eventType = event.eventType;
+      const description = event.eventDescription;
 
-    return eventsArray.map((event: any) => {
-      const timestamp = event['Timestamp'];
-      const eventType = event['EventType'];
-      const description = event['EventDescription'];
-
-      const address = event['Address'];
+      // Extract location information
       let locationStr: string | undefined;
-      if (address) {
-        const city = address['City'];
-        const state = address['StateOrProvinceCode'];
-        const country = address['CountryCode'];
+      if (event.location) {
+        const location = event.location;
+        const city = location.city;
+        const state = location.stateOrProvinceCode;
+        const country = location.countryCode;
         locationStr = [city, state, country].filter(Boolean).join(', ');
       }
 
@@ -494,3 +380,4 @@ export const getFedExTrackingHistory = async (trackingNumber: string): Promise<A
     return [];
   }
 };
+

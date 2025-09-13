@@ -99,6 +99,10 @@ router.get('/', authenticateToken, async (req: Request, res: Response): Promise<
 
     const totalPages = Math.ceil(total / limit);
 
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     res.json({
       success: true,
       data: {
@@ -314,6 +318,10 @@ router.get('/grouped', authenticateToken, async (req: Request, res: Response): P
 
     console.log('Grouped Packages:', groupedPackages);
 
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     res.json({
       success: true,
       data: groupedPackages
@@ -342,6 +350,10 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response): Promi
       } as ApiResponse);
       return;
     }
+
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     res.json({
       success: true,
@@ -574,6 +586,10 @@ router.post('/:id/refresh', authenticateToken, async (req: Request, res: Respons
     if (updatedStatus === 'Delivered' && deliveryDate && pkg.deliveryDate && !pkg.spodEmailSent) {
       await sendPodEmailsIfConfigured(pkg, userId);
     }
+
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     res.json({
       success: true,

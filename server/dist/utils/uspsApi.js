@@ -46,8 +46,8 @@ const checkUSPSDeliveryStatus = async (trackingNumber) => {
     try {
         console.log(`Checking USPS delivery status for ${trackingNumber}`);
         if (!USPS_USER_ID) {
-            console.log('USPS_USER_ID not configured, using simulation for testing');
-            return simulateUSPSDeliveryForTesting(trackingNumber);
+            console.log('USPS_USER_ID not configured.');
+            return { isDelivered: false, status: 'In Transit' };
         }
         const apiUrl = `https://secure.shippingapis.com/ShippingAPI.dll`;
         const xmlRequest = `<?xml version="1.0" encoding="UTF-8"?>
@@ -64,11 +64,11 @@ const checkUSPSDeliveryStatus = async (trackingNumber) => {
         if (result.TrackResponse?.Error) {
             const errorDesc = result.TrackResponse.Error.Description;
             console.error(`USPS API Error: ${errorDesc}`);
-            return simulateUSPSDeliveryForTesting(trackingNumber);
+            return { isDelivered: false, status: 'In Transit' };
         }
         const trackInfo = result.TrackResponse?.TrackInfo;
         if (!trackInfo) {
-            return simulateUSPSDeliveryForTesting(trackingNumber);
+            return { isDelivered: false, status: 'In Transit' };
         }
         const trackSummary = trackInfo.TrackSummary || '';
         const isDelivered = trackSummary.toLowerCase().includes('delivered') ||
@@ -96,40 +96,16 @@ const checkUSPSDeliveryStatus = async (trackingNumber) => {
     }
     catch (error) {
         console.error(`Error checking USPS delivery status for ${trackingNumber}:`, error.message);
-        return simulateUSPSDeliveryForTesting(trackingNumber);
+        return { isDelivered: false, status: 'In Transit' };
     }
 };
 exports.checkUSPSDeliveryStatus = checkUSPSDeliveryStatus;
-const simulateUSPSDeliveryForTesting = (trackingNumber) => {
-    const lastDigit = parseInt(trackingNumber.slice(-1));
-    const isDelivered = lastDigit % 2 !== 0;
-    if (isDelivered) {
-        const deliveryDate = new Date();
-        deliveryDate.setDate(deliveryDate.getDate() - Math.floor(Math.random() * 5));
-        console.log(`✅ Simulated USPS delivery for ${trackingNumber}:`, {
-            isDelivered: true,
-            deliveryDate: deliveryDate.toISOString()
-        });
-        return {
-            isDelivered: true,
-            deliveryDate,
-            status: 'Delivered'
-        };
-    }
-    else {
-        console.log(`📦 Simulated USPS in-transit status for ${trackingNumber}`);
-        return {
-            isDelivered: false,
-            status: 'In Transit'
-        };
-    }
-};
 const getUSPSTrackingHistory = async (trackingNumber) => {
     try {
         console.log(`Getting USPS tracking history for ${trackingNumber}`);
         if (!USPS_USER_ID) {
-            console.log('USPS_USER_ID not configured, returning simulated history');
-            return simulateUSPSTrackingHistoryForTesting(trackingNumber);
+            console.log('USPS_USER_ID not configured.');
+            return [];
         }
         const apiUrl = `https://secure.shippingapis.com/ShippingAPI.dll`;
         const xmlRequest = `<?xml version="1.0" encoding="UTF-8"?>
@@ -145,11 +121,11 @@ const getUSPSTrackingHistory = async (trackingNumber) => {
         const result = await parser.parseStringPromise(response.data);
         if (result.TrackResponse?.Error) {
             console.error(`USPS API Error: ${result.TrackResponse.Error.Description}`);
-            return simulateUSPSTrackingHistoryForTesting(trackingNumber);
+            return [];
         }
         const trackInfo = result.TrackResponse?.TrackInfo;
         if (!trackInfo) {
-            return simulateUSPSTrackingHistoryForTesting(trackingNumber);
+            return [];
         }
         const trackDetails = trackInfo.TrackDetail;
         if (!trackDetails) {
@@ -189,33 +165,8 @@ const getUSPSTrackingHistory = async (trackingNumber) => {
     }
     catch (error) {
         console.error(`Error getting USPS tracking history for ${trackingNumber}:`, error.message);
-        return simulateUSPSTrackingHistoryForTesting(trackingNumber);
+        return [];
     }
 };
 exports.getUSPSTrackingHistory = getUSPSTrackingHistory;
-const simulateUSPSTrackingHistoryForTesting = (trackingNumber) => {
-    const history = [];
-    const now = new Date();
-    const events = [
-        { status: 'Accepted at USPS Origin Facility', location: 'Origin City, ST', daysAgo: 3 },
-        { status: 'Arrived at USPS Facility', location: 'Transit City, ST', daysAgo: 2 },
-        { status: 'Out for Delivery', location: 'Delivery City, ST', daysAgo: 1 },
-    ];
-    const lastDigit = parseInt(trackingNumber.slice(-1));
-    if (lastDigit % 2 !== 0) {
-        events.push({ status: 'Delivered', location: 'Delivery Address', daysAgo: 0 });
-    }
-    for (const event of events) {
-        const eventDate = new Date(now);
-        eventDate.setDate(eventDate.getDate() - event.daysAgo);
-        history.push({
-            date: eventDate,
-            status: event.status,
-            location: event.location,
-            description: event.status
-        });
-    }
-    console.log(`📋 Simulated USPS tracking history for ${trackingNumber}:`, history.length, 'events');
-    return history;
-};
 //# sourceMappingURL=uspsApi.js.map

@@ -21,11 +21,44 @@ const sendPodEmail = async (to, podData) => {
         const transporter = createTransporter();
         const subject = `${podData.customer} - FedEx POD - ${podData.trackingNumber}`;
         const htmlContent = generatePodEmailHtml(podData);
+        const attachments = [];
+        const pod = podData.proofOfDelivery;
+        if (pod.spodPdfBase64) {
+            attachments.push({
+                filename: `SPOD_${podData.trackingNumber}.pdf`,
+                content: pod.spodPdfBase64,
+                encoding: 'base64',
+                contentType: 'application/pdf'
+            });
+        }
+        else if (pod.spodPdfUrl) {
+            attachments.push({
+                filename: `SPOD_${podData.trackingNumber}.pdf`,
+                path: pod.spodPdfUrl,
+                contentType: 'application/pdf'
+            });
+        }
+        if (pod.deliveryPhoto && pod.deliveryPhoto.startsWith('http')) {
+            attachments.push({
+                filename: `PPOD_${podData.trackingNumber}.jpg`,
+                path: pod.deliveryPhoto,
+                contentType: 'image/jpeg'
+            });
+        }
+        else if (pod.deliveryPhoto && !pod.deliveryPhoto.startsWith('http')) {
+            attachments.push({
+                filename: `PPOD_${podData.trackingNumber}.jpg`,
+                content: pod.deliveryPhoto,
+                encoding: 'base64',
+                contentType: 'image/jpeg'
+            });
+        }
         const mailOptions = {
             from: process.env.SMTP_FROM || process.env.SMTP_USER,
             to,
             subject,
-            html: htmlContent
+            html: htmlContent,
+            attachments: attachments.length > 0 ? attachments : undefined
         };
         await transporter.sendMail(mailOptions);
         return true;

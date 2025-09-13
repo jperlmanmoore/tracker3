@@ -36,6 +36,8 @@ export interface ProofOfDelivery {
     signatureObtained?: boolean;
     signedBy?: string;
     deliveryPhoto?: string;
+    spodPdfUrl?: string;
+    spodPdfBase64?: string;
     deliveryInstructions?: string;
     proofOfDeliveryUrl?: string;
     lastUpdated?: Date;

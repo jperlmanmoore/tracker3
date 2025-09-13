@@ -271,7 +271,8 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       const token = localStorage.getItem('token');
       const response = await axios.get<ApiResponse<any[]>>('/api/packages/grouped', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        params: { _t: Date.now() } // Cache-busting parameter
       });
 
       if (response.data.success && response.data.data) {
@@ -414,7 +415,8 @@ const Dashboard: React.FC = () => {
       const response = await axios.post('/api/packages/bulk-refresh', {
         packageIds: allPackageIds
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        params: { _t: Date.now() } // Cache-busting parameter
       });
 
       if (response.data.success) {
