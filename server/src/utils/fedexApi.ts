@@ -154,6 +154,14 @@ const extractPodFromFedExResponse = (jsonResult: any, trackingNumber: string): P
       if (locationDescription) {
         pod.deliveryLocation = locationDescription;
       }
+
+      // Extract SPOD and PPOD information
+      if (deliveryDetails.signedProofOfDelivery) {
+        pod.spodPdfUrl = deliveryDetails.signedProofOfDelivery;
+      }
+      if (deliveryDetails.photoProofOfDelivery) {
+        pod.deliveryPhoto = deliveryDetails.photoProofOfDelivery;
+      }
     }
 
     // Extract signature information from scan events
@@ -179,6 +187,16 @@ const extractPodFromFedExResponse = (jsonResult: any, trackingNumber: string): P
             if (signatureMatch) {
               pod.signedBy = signatureMatch[1].trim();
             }
+          }
+        }
+
+        // Extract SPOD/PPOD from scan event details if available
+        if (deliveryEvent.scanDetails) {
+          if (deliveryEvent.scanDetails.signedProofOfDelivery) {
+            pod.spodPdfUrl = deliveryEvent.scanDetails.signedProofOfDelivery;
+          }
+          if (deliveryEvent.scanDetails.photoProofOfDelivery) {
+            pod.deliveryPhoto = deliveryEvent.scanDetails.photoProofOfDelivery;
           }
         }
       }
