@@ -11,7 +11,7 @@ import User from '../models/User';
 const router: Router = express.Router();
 
 // Helper function to send POD emails if configured
-const sendPodEmailsIfConfigured = async (pkg: any, userId: string): Promise<void> => {
+const sendPodEmailsIfConfigured = async (pkg: any, userId: string, fedexResponse?: any): Promise<void> => {
   try {
     // Check if SPOD email has already been sent
     if (pkg.spodEmailSent) {
@@ -41,7 +41,8 @@ const sendPodEmailsIfConfigured = async (pkg: any, userId: string): Promise<void
       customer: pkg.customer,
       carrier: pkg.carrier,
       deliveryDate: pkg.deliveryDate,
-      proofOfDelivery: pkg.proofOfDelivery
+      proofOfDelivery: pkg.proofOfDelivery,
+      fedexResponse: fedexResponse // Pass FedEx response for SPOD/PPOD extraction
     };
 
     // Send emails
@@ -242,7 +243,13 @@ router.post('/', authenticateToken, async (req: Request, res: Response): Promise
 
           // Send POD emails if package was delivered
           if (updatedStatus === 'Delivered' && deliveryDate && !newPackage.spodEmailSent) {
-            await sendPodEmailsIfConfigured(newPackage, userId);
+            // For FedEx packages, pass the delivery status response for SPOD/PPOD extraction
+            if (detectedCarrier === 'FedEx') {
+              const deliveryStatus = await checkFedExDeliveryStatus(trackingNumber);
+              await sendPodEmailsIfConfigured(newPackage, userId, deliveryStatus);
+            } else {
+              await sendPodEmailsIfConfigured(newPackage, userId);
+            }
           }
         } catch (refreshError) {
           console.error(`Auto-refresh failed for ${trackingNumber}:`, refreshError);
@@ -584,7 +591,13 @@ router.post('/:id/refresh', authenticateToken, async (req: Request, res: Respons
 
     // Send POD emails if package was just delivered
     if (updatedStatus === 'Delivered' && deliveryDate && pkg.deliveryDate && !pkg.spodEmailSent) {
-      await sendPodEmailsIfConfigured(pkg, userId);
+      // For FedEx packages, pass the delivery status response for SPOD/PPOD extraction
+      if (pkg.carrier === 'FedEx') {
+        const deliveryStatus = await checkFedExDeliveryStatus(pkg.trackingNumber);
+        await sendPodEmailsIfConfigured(pkg, userId, deliveryStatus);
+      } else {
+        await sendPodEmailsIfConfigured(pkg, userId);
+      }
     }
 
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -1003,7 +1016,13 @@ router.post('/bulk-refresh', authenticateToken, async (req: Request, res: Respon
 
           // Send POD emails if package was just delivered
           if (updatedStatus === 'Delivered' && deliveryDate && !pkg.spodEmailSent) {
-            await sendPodEmailsIfConfigured(pkg, userId);
+            // For FedEx packages, pass the delivery status response for SPOD/PPOD extraction
+            if (pkg.carrier === 'FedEx') {
+              const deliveryStatus = await checkFedExDeliveryStatus(pkg.trackingNumber);
+              await sendPodEmailsIfConfigured(pkg, userId, deliveryStatus);
+            } else {
+              await sendPodEmailsIfConfigured(pkg, userId);
+            }
           }
         }
 

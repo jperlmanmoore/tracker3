@@ -7,6 +7,7 @@ interface PodEmailData {
   carrier: 'USPS' | 'FedEx';
   deliveryDate: Date;
   proofOfDelivery: ProofOfDelivery;
+  fedexResponse?: any; // FedEx API response for SPOD/PPOD extraction
 }
 
 // Create email transporter
@@ -37,15 +38,91 @@ export const sendPodEmail = async (
     const attachments: any[] = [];
     const pod = podData.proofOfDelivery;
 
-    // Attach SPOD PDF (by URL or base64)
-    if (pod.spodPdfBase64) {
+    // Extract SPOD/PPOD from FedEx response if available
+    let spodInfo = '';
+    let ppodInfo = '';
+
+    if (podData.carrier === 'FedEx' && podData.fedexResponse) {
+      const fedexResponse = podData.fedexResponse;
+      try {
+        const output = fedexResponse.output;
+        if (output && output.completeTrackResults && output.completeTrackResults[0]) {
+          const trackResult = output.completeTrackResults[0];
+          if (trackResult.trackResults && trackResult.trackResults[0]) {
+            const trackingResult = trackResult.trackResults[0];
+
+            // Check delivery details for SPOD/PPOD
+            if (trackingResult.deliveryDetails) {
+              const deliveryDetails = trackingResult.deliveryDetails;
+              if (deliveryDetails.signedProofOfDelivery) {
+                spodInfo = 'Available';
+                // Add SPOD as attachment if URL is available
+                if (deliveryDetails.signedProofOfDelivery.startsWith('http')) {
+                  attachments.push({
+                    filename: `SPOD_${podData.trackingNumber}.pdf`,
+                    path: deliveryDetails.signedProofOfDelivery,
+                    contentType: 'application/pdf'
+                  });
+                }
+              }
+              if (deliveryDetails.photoProofOfDelivery) {
+                ppodInfo = 'Available';
+                // Add PPOD as attachment if URL is available
+                if (deliveryDetails.photoProofOfDelivery.startsWith('http')) {
+                  attachments.push({
+                    filename: `PPOD_${podData.trackingNumber}.jpg`,
+                    path: deliveryDetails.photoProofOfDelivery,
+                    contentType: 'image/jpeg'
+                  });
+                }
+              }
+            }
+
+            // Check scan events for SPOD/PPOD
+            if (trackingResult.scanEvents) {
+              const deliveryEvent = trackingResult.scanEvents.find((event: any) =>
+                event.eventType === 'DL' || event.eventDescription?.toLowerCase().includes('delivered')
+              );
+
+              if (deliveryEvent && deliveryEvent.scanDetails) {
+                if (deliveryEvent.scanDetails.signedProofOfDelivery && !spodInfo) {
+                  spodInfo = 'Available';
+                  if (deliveryEvent.scanDetails.signedProofOfDelivery.startsWith('http')) {
+                    attachments.push({
+                      filename: `SPOD_${podData.trackingNumber}.pdf`,
+                      path: deliveryEvent.scanDetails.signedProofOfDelivery,
+                      contentType: 'application/pdf'
+                    });
+                  }
+                }
+                if (deliveryEvent.scanDetails.photoProofOfDelivery && !ppodInfo) {
+                  ppodInfo = 'Available';
+                  if (deliveryEvent.scanDetails.photoProofOfDelivery.startsWith('http')) {
+                    attachments.push({
+                      filename: `PPOD_${podData.trackingNumber}.jpg`,
+                      path: deliveryEvent.scanDetails.photoProofOfDelivery,
+                      contentType: 'image/jpeg'
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error extracting SPOD/PPOD from FedEx response:', error);
+      }
+    }
+
+    // Attach SPOD PDF (by URL or base64) - fallback to existing logic
+    if (pod.spodPdfBase64 && attachments.length === 0) {
       attachments.push({
         filename: `SPOD_${podData.trackingNumber}.pdf`,
         content: pod.spodPdfBase64,
         encoding: 'base64',
         contentType: 'application/pdf'
       });
-    } else if (pod.spodPdfUrl) {
+    } else if (pod.spodPdfUrl && attachments.length === 0) {
       attachments.push({
         filename: `SPOD_${podData.trackingNumber}.pdf`,
         path: pod.spodPdfUrl,
@@ -53,14 +130,14 @@ export const sendPodEmail = async (
       });
     }
 
-    // Attach PPOD photo (by URL or base64)
-    if (pod.deliveryPhoto && pod.deliveryPhoto.startsWith('http')) {
+    // Attach PPOD photo (by URL or base64) - fallback to existing logic
+    if (pod.deliveryPhoto && pod.deliveryPhoto.startsWith('http') && attachments.length < 2) {
       attachments.push({
         filename: `PPOD_${podData.trackingNumber}.jpg`,
         path: pod.deliveryPhoto,
         contentType: 'image/jpeg'
       });
-    } else if (pod.deliveryPhoto && !pod.deliveryPhoto.startsWith('http')) {
+    } else if (pod.deliveryPhoto && !pod.deliveryPhoto.startsWith('http') && attachments.length < 2) {
       attachments.push({
         filename: `PPOD_${podData.trackingNumber}.jpg`,
         content: pod.deliveryPhoto,
@@ -119,6 +196,50 @@ const generatePodEmailHtml = (podData: PodEmailData): string => {
     proofOfDelivery
   } = podData;
 
+  // Extract SPOD/PPOD info from FedEx response if available
+  let spodStatus = 'Not available';
+  let ppodStatus = 'Not available';
+
+  if (podData.carrier === 'FedEx' && podData.fedexResponse) {
+    try {
+      const output = podData.fedexResponse.output;
+      if (output && output.completeTrackResults && output.completeTrackResults[0]) {
+        const trackResult = output.completeTrackResults[0];
+        if (trackResult.trackResults && trackResult.trackResults[0]) {
+          const trackingResult = trackResult.trackResults[0];
+
+          // Check delivery details
+          if (trackingResult.deliveryDetails) {
+            if (trackingResult.deliveryDetails.signedProofOfDelivery) {
+              spodStatus = 'Available';
+            }
+            if (trackingResult.deliveryDetails.photoProofOfDelivery) {
+              ppodStatus = 'Available';
+            }
+          }
+
+          // Check scan events
+          if (trackingResult.scanEvents) {
+            const deliveryEvent = trackingResult.scanEvents.find((event: any) =>
+              event.eventType === 'DL' || event.eventDescription?.toLowerCase().includes('delivered')
+            );
+
+            if (deliveryEvent && deliveryEvent.scanDetails) {
+              if (deliveryEvent.scanDetails.signedProofOfDelivery && spodStatus === 'Not available') {
+                spodStatus = 'Available';
+              }
+              if (deliveryEvent.scanDetails.photoProofOfDelivery && ppodStatus === 'Not available') {
+                ppodStatus = 'Available';
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking SPOD/PPOD status:', error);
+    }
+  }
+
   return `
     <!DOCTYPE html>
     <html>
@@ -132,8 +253,12 @@ const generatePodEmailHtml = (podData: PodEmailData): string => {
         .content { background-color: #ffffff; padding: 20px; border: 1px solid #dee2e6; border-radius: 5px; }
         .tracking-info { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; }
         .signature-info { background-color: #d1ecf1; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .spod-ppod-info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #007bff; }
         .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; }
         .carrier-badge { display: inline-block; padding: 5px 10px; background-color: ${carrier === 'FedEx' ? '#0074D9' : '#0071BC'}; color: white; border-radius: 3px; font-weight: bold; }
+        .status-badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+        .status-available { background-color: #28a745; color: white; }
+        .status-unavailable { background-color: #6c757d; color: white; }
       </style>
     </head>
     <body>
@@ -168,6 +293,15 @@ const generatePodEmailHtml = (podData: PodEmailData): string => {
 
             ${proofOfDelivery.deliveryPhoto ? `<p><strong>Delivery Photo:</strong> <a href="${proofOfDelivery.deliveryPhoto}">View Photo</a></p>` : ''}
           </div>
+
+          ${carrier === 'FedEx' ? `
+          <div class="spod-ppod-info">
+            <h3>FedEx Proof of Delivery Documents</h3>
+            <p><strong>SPOD (Signed Proof of Delivery):</strong> <span class="status-badge ${spodStatus === 'Available' ? 'status-available' : 'status-unavailable'}">${spodStatus}</span></p>
+            <p><strong>PPOD (Photo Proof of Delivery):</strong> <span class="status-badge ${ppodStatus === 'Available' ? 'status-available' : 'status-unavailable'}">${ppodStatus}</span></p>
+            <p><em>Documents are attached to this email if available.</em></p>
+          </div>
+          ` : ''}
 
           ${proofOfDelivery.proofOfDeliveryUrl ?
             `<p><strong>View Full Proof of Delivery:</strong> <a href="${proofOfDelivery.proofOfDeliveryUrl}" target="_blank">Click Here</a></p>`
