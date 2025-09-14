@@ -144,6 +144,12 @@ const extractPodFromFedExResponse = (jsonResult, trackingNumber) => {
             if (locationDescription) {
                 pod.deliveryLocation = locationDescription;
             }
+            if (deliveryDetails.signedProofOfDelivery) {
+                pod.spodPdfUrl = deliveryDetails.signedProofOfDelivery;
+            }
+            if (deliveryDetails.photoProofOfDelivery) {
+                pod.deliveryPhoto = deliveryDetails.photoProofOfDelivery;
+            }
         }
         const scanEvents = trackingResult.scanEvents;
         if (scanEvents && scanEvents.length > 0) {
@@ -160,6 +166,14 @@ const extractPodFromFedExResponse = (jsonResult, trackingNumber) => {
                         if (signatureMatch) {
                             pod.signedBy = signatureMatch[1].trim();
                         }
+                    }
+                }
+                if (deliveryEvent.scanDetails) {
+                    if (deliveryEvent.scanDetails.signedProofOfDelivery) {
+                        pod.spodPdfUrl = deliveryEvent.scanDetails.signedProofOfDelivery;
+                    }
+                    if (deliveryEvent.scanDetails.photoProofOfDelivery) {
+                        pod.deliveryPhoto = deliveryEvent.scanDetails.photoProofOfDelivery;
                     }
                 }
             }

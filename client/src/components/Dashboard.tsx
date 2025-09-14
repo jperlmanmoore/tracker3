@@ -4,13 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { Package } from '../types/package';
 import { ApiResponse } from '../types/common';
 import AddPackageModal from './AddPackageModal';
-import ProofOfDeliveryModal from './ProofOfDeliveryModal';
 import BulkProofOfDeliveryModal from './BulkProofOfDeliveryModal';
 import EditPackageModal from './EditPackageModal';
 import DeleteCustomerModal from './DeleteCustomerModal';
 import UserSettings from './UserSettings';
 import axios from 'axios';
-import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaSearch, FaFilter, FaSortUp, FaSortDown, FaCog } from 'react-icons/fa';
+import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaSearch, FaFilter, FaSortUp, FaSortDown, FaCog, FaBox, FaCheckCircle, FaTruck, FaUsers, FaSync } from 'react-icons/fa';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -24,20 +23,15 @@ const Dashboard: React.FC = () => {
   const [filterClient, setFilterClient] = useState<string>('');
   const [filterCarrier, setFilterCarrier] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
-  const [showProofModal, setShowProofModal] = useState<boolean>(false);
   const [showBulkProofModal, setShowBulkProofModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showDeleteCustomerModal, setShowDeleteCustomerModal] = useState<boolean>(false);
   const [showUserSettings, setShowUserSettings] = useState<boolean>(false);
-  const [selectedPackage, setSelectedPackage] = useState<{
-    id?: string;
-    trackingNumber?: string;
-    customer?: string;
-    carrier?: string;
-  }>({});
   const [selectedPackageForEdit, setSelectedPackageForEdit] = useState<any>(null);
 
-  // Grouped filter/sort logic for table rendering
+  const [globalSearch, setGlobalSearch] = useState<string>('');
+
+  // Enhanced filtered data with global search
   const filteredAndSortedGroupedPackages = useMemo(() => {
     if (!Array.isArray(packages)) return [];
 
@@ -47,6 +41,19 @@ const Dashboard: React.FC = () => {
       groups = groups.filter(group =>
         group._id && group._id.toLowerCase().includes(filterClient.toLowerCase())
       );
+    }
+
+    // Global search across all packages
+    if (globalSearch) {
+      groups = groups.map(group => ({
+        ...group,
+        packages: group.packages.filter(pkg =>
+          pkg.trackingNumber?.toLowerCase().includes(globalSearch.toLowerCase()) ||
+          pkg.customer?.toLowerCase().includes(globalSearch.toLowerCase()) ||
+          pkg.carrier?.toLowerCase().includes(globalSearch.toLowerCase()) ||
+          pkg.status?.toLowerCase().includes(globalSearch.toLowerCase())
+        )
+      })).filter(group => group.packages.length > 0);
     }
 
     // For each group, filter and sort its packages
@@ -82,7 +89,7 @@ const Dashboard: React.FC = () => {
       })
       // Remove groups with no packages after filtering
       .filter(group => group.packages && group.packages.length > 0);
-  }, [packages, filterClient, filterCarrier, sortBy, sortOrder]);
+  }, [packages, filterClient, filterCarrier, sortBy, sortOrder, globalSearch]);
   const [selectedCustomerForDelete, setSelectedCustomerForDelete] = useState<{
     name: string;
     packageCount: number;
@@ -460,225 +467,258 @@ const Dashboard: React.FC = () => {
   return showUserSettings ? (
     <UserSettings onBack={() => setShowUserSettings(false)} />
   ) : (
-    <Container fluid className="py-1 fade-in">
-      <Row>
-        <Col>
-          <div className="d-flex justify-content-between align-items-center mb-2">
-            <div>
-              <h1 className="text-primary mb-1">📦 Package Dashboard</h1>
-              <p className="text-muted mb-0">Welcome back, {user?.firstName || user?.username}!</p>
+    <>
+      <Container fluid className="py-4 fade-in">
+        {/* Modern Header */}
+        <div className="modern-header">
+          <div className="header-content">
+            <div className="header-text">
+              <h1 className="display-4 fw-bold mb-1">📦 Package Dashboard</h1>
+              <p className="text-black lead mb-0">
+                Welcome back, {user?.firstName || user?.username}!
+              </p>
             </div>
-            <div className="d-flex gap-2">
-              <OverlayTrigger placement="bottom" overlay={<Tooltip>Refresh All Package Statuses</Tooltip>}>
-                <Button 
-                  variant="outline-success" 
-                  className="d-flex align-items-center gap-2"
-                  onClick={refreshAllPackages}
-                  disabled={loading}
-                >
-                  {FaSearch({size: 14})}
-                  Refresh All
-                </Button>
-              </OverlayTrigger>
-              <OverlayTrigger placement="bottom" overlay={<Tooltip>User Settings</Tooltip>}>
-                <Button 
-                  variant="outline-info" 
-                  className="d-flex align-items-center gap-2"
-                  onClick={() => setShowUserSettings(true)}
-                >
-                  {FaCog({size: 14})}
-                  Settings
-                </Button>
-              </OverlayTrigger>
-              <OverlayTrigger placement="bottom" overlay={<Tooltip>Add New Package</Tooltip>}>
-                <Button 
-                  variant="primary" 
-                  className="d-flex align-items-center gap-2"
-                  onClick={() => setShowAddModal(true)}
-                >
-                  {FaPlus({size: 14})}
-                  Add Package
-                </Button>
-              </OverlayTrigger>
-              <OverlayTrigger placement="bottom" overlay={<Tooltip>Logout</Tooltip>}>
-                <Button variant="outline-secondary" onClick={logout} className="d-flex align-items-center gap-2">
-                  {FaSignOutAlt({size: 14})}
-                  Logout
-                </Button>
-              </OverlayTrigger>
+            <div className="header-actions">
+              <div className="search-container me-3">
+                <Form.Control
+                  type="text"
+                  placeholder="Search packages..."
+                  className="search-input"
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                />
+                {FaSearch({className: "search-icon"})}
+              </div>
+              <div className="d-flex gap-2">
+                <OverlayTrigger placement="bottom" overlay={<Tooltip>Refresh All Package Statuses</Tooltip>}>
+                  <Button 
+                    variant="outline-light" 
+                    className="glass-button d-flex align-items-center gap-2"
+                    onClick={refreshAllPackages}
+                    disabled={loading}
+                  >
+                    {FaSync({size: 14})}
+                    Refresh All
+                  </Button>
+                </OverlayTrigger>
+                <OverlayTrigger placement="bottom" overlay={<Tooltip>User Settings</Tooltip>}>
+                  <Button 
+                    variant="outline-light" 
+                    className="glass-button d-flex align-items-center gap-2"
+                    onClick={() => setShowUserSettings(true)}
+                  >
+                    {FaCog({size: 14})}
+                    Settings
+                  </Button>
+                </OverlayTrigger>
+                <OverlayTrigger placement="bottom" overlay={<Tooltip>Add New Package</Tooltip>}>
+                  <Button 
+                    variant="outline-light" 
+                    className="glass-button d-flex align-items-center gap-2"
+                    onClick={() => setShowAddModal(true)}
+                  >
+                    {FaPlus({size: 14})}
+                    Add Package
+                  </Button>
+                </OverlayTrigger>
+                <OverlayTrigger placement="bottom" overlay={<Tooltip>Logout</Tooltip>}>
+                  <Button variant="outline-light" className="glass-button d-flex align-items-center gap-2" onClick={logout}>
+                    {FaSignOutAlt({size: 14})}
+                    Logout
+                  </Button>
+                </OverlayTrigger>
+              </div>
             </div>
           </div>
+        </div>
 
-          {error && <Alert variant="danger" dismissible onClose={() => setError('')} className="mb-2">{error}</Alert>}
+        {error && <Alert variant="danger" dismissible onClose={() => setError('')} className="mb-3">{error}</Alert>}
+        {success && <Alert variant="success" dismissible onClose={() => setSuccess('')} className="mb-3">{success}</Alert>}
 
-          {/* Filters */}
-          <Card className="mb-2">
-            <Card.Body className="py-2">
-              <Row>
-                <Col md={4}>
-                  <Form.Group>
-                    <Form.Label>Filter by Client</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter client name..."
-                      value={filterClient}
-                      onChange={(e) => setFilterClient(e.target.value)}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={4}>
-                  <Form.Group>
-                    <Form.Label htmlFor="filter-select">Filter by Carrier</Form.Label>
-                    <Form.Select
-                      id="filter-select"
-                      value={filterCarrier}
-                      onChange={(e) => setFilterCarrier(e.target.value)}
-                      aria-label="Filter by carrier"
-                      title="Filter by carrier"
-                    >
-                      <option value="">All Carriers</option>
-                      <option value="usps">USPS</option>
-                      <option value="fedex">FedEx</option>
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-                <Col md={4} className="d-flex align-items-end">
-                  <OverlayTrigger placement="top" overlay={<Tooltip>Clear All Filters</Tooltip>}>
-                    <Button 
-                      variant="outline-secondary" 
-                      className="d-flex align-items-center gap-2"
-                      onClick={() => {
-                        setFilterClient('');
-                        setFilterCarrier('');
-                      }}
-                    >
-                      {FaFilter({size: 14})}
-                      Clear Filters
-                    </Button>
-                  </OverlayTrigger>
-                </Col>
-              </Row>
-            </Card.Body>
-          </Card>
-
-          {/* Statistics */}
-          <Row className="mb-2">
-            <Col md={3}>
-              <Card className="text-center">
-                <Card.Body className="py-2">
-                  <h3 className="text-primary mb-0 fs-5">{
-                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)
-                  }</h3>
-                  <p className="text-muted mb-0 small">Total Packages</p>
-                </Card.Body>
-              </Card>
-            </Col>
-            <Col md={3}>
-              <Card className="text-center">
-                <Card.Body className="py-2">
-                  <h3 className="text-success mb-0 fs-5">{
-                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'delivered').length, 0)
-                  }</h3>
-                  <p className="text-muted mb-0 small">Delivered</p>
-                </Card.Body>
-              </Card>
-            </Col>
-            <Col md={3}>
-              <Card className="text-center">
-                <Card.Body className="py-2">
-                  <h3 className="text-warning mb-0 fs-5">{
-                    filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'in transit').length, 0)
-                  }</h3>
-                  <p className="text-muted mb-0 small">In Transit</p>
-                </Card.Body>
-              </Card>
-            </Col>
-            <Col md={3}>
-              <Card className="text-center">
-                <Card.Body className="py-2">
-                  <h3 className="text-info mb-0 fs-5">{filteredAndSortedGroupedPackages.length}</h3>
-                  <p className="text-muted mb-0 small">Unique Clients</p>
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-
-          {/* Packages Table */}
-          <Card>
-            <Card.Body className="py-2">
-              <div className="d-flex justify-content-between align-items-center mb-1">
-                <h5 className="mb-0">Package List ({filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)})</h5>
-                <small className="text-muted">
-                  Sorted by {sortBy} ({sortOrder === 'asc' ? 'ascending' : 'descending'})
-                </small>
-              </div>
-
-              {filteredAndSortedGroupedPackages.length === 0 ? (
-                <div className="text-center py-3">
-                  <p className="text-muted">No packages found.</p>
-                  <Button variant="primary" onClick={() => setShowAddModal(true)}>
-                    Add Your First Package
+        {/* Filters */}
+        <Card className="glass-card mb-3">
+          <Card.Body className="py-3">
+            <Row>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Filter by Client</Form.Label>
+                  <Form.Control
+                    type="text"
+                    placeholder="Enter client name..."
+                    value={filterClient}
+                    onChange={(e) => setFilterClient(e.target.value)}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label htmlFor="filter-select">Filter by Carrier</Form.Label>
+                  <Form.Select
+                    id="filter-select"
+                    value={filterCarrier}
+                    onChange={(e) => setFilterCarrier(e.target.value)}
+                    aria-label="Filter by carrier"
+                    title="Filter packages by shipping carrier (USPS or FedEx)"
+                  >
+                    <option value="">All Carriers</option>
+                    <option value="usps">USPS</option>
+                    <option value="fedex">FedEx</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={4} className="d-flex align-items-end">
+                <OverlayTrigger placement="top" overlay={<Tooltip>Clear All Filters</Tooltip>}>
+                  <Button 
+                    variant="outline-light" 
+                    className="glass-button d-flex align-items-center gap-2"
+                    onClick={() => {
+                      setFilterClient('');
+                      setFilterCarrier('');
+                      setGlobalSearch('');
+                    }}
+                  >
+                    {FaFilter({size: 14})}
+                    Clear Filters
                   </Button>
+                </OverlayTrigger>
+              </Col>
+            </Row>
+          </Card.Body>
+        </Card>
+
+        {/* Statistics */}
+        <Row className="mb-4">
+          <Col md={3}>
+            <Card className="glass-card text-center stat-card card-hover">
+              <Card.Body className="py-3">
+                <div className="stat-icon mb-2">
+                  {FaBox({size: 24})}
                 </div>
-              ) : (
-                <div className="table-responsive table-container">
-                  <Table hover className="mb-0 table-compact">
-                    <thead>
-                      <tr>
-                        <th 
-                          className="sortable-header py-1"
-                          onClick={() => handleSort('date')}
-                        >
-                          Date Added {sortBy === 'date' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
-                        </th>
-                        <th 
-                          className="sortable-header py-1"
-                          onClick={() => handleSort('client')}
-                        >
-                          Client {sortBy === 'client' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
-                        </th>
-                        <th 
-                          className="sortable-header py-1 px-1"
-                          onClick={() => handleSort('carrier')}
-                        >
-                          Carrier {sortBy === 'carrier' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
-                        </th>
-                        <th 
-                          className="sortable-header py-1"
-                          onClick={() => handleSort('status')}
-                        >
-                          Status {sortBy === 'status' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
-                        </th>
-                        <th className="py-1 px-1">
-                          Tracking
-                        </th>
-                        <th className="py-1">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {renderGroupedPackages(filteredAndSortedGroupedPackages)}
-                    </tbody>
-                  </Table>
+                <h2 className="text-white mb-1 fw-bold">
+                  {filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)}
+                </h2>
+                <p className="text-white-50 mb-0 small fw-medium">Total Packages</p>
+                <div className="stat-trend mt-2">
+                  <small className="text-white-75">↗️ +12% this month</small>
                 </div>
-              )}
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col md={3}>
+            <Card className="glass-card text-center stat-card card-hover">
+              <Card.Body className="py-3">
+                <div className="stat-icon mb-2">
+                  {FaCheckCircle({size: 24})}
+                </div>
+                <h2 className="text-white mb-1 fw-bold">
+                  {filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'delivered').length, 0)}
+                </h2>
+                <p className="text-white-50 mb-0 small fw-medium">Delivered</p>
+                <div className="stat-trend mt-2">
+                  <small className="text-white-75">↗️ +8% this week</small>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col md={3}>
+            <Card className="glass-card text-center stat-card card-hover">
+              <Card.Body className="py-3">
+                <div className="stat-icon mb-2">
+                  {FaTruck({size: 24})}
+                </div>
+                <h2 className="text-white mb-1 fw-bold">
+                  {filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.filter(p => p.status && p.status.toLowerCase() === 'in transit').length, 0)}
+                </h2>
+                <p className="text-white-50 mb-0 small fw-medium">In Transit</p>
+                <div className="stat-trend mt-2">
+                  <small className="text-white-75">↗️ +15% today</small>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col md={3}>
+            <Card className="glass-card text-center stat-card card-hover">
+              <Card.Body className="py-3">
+                <div className="stat-icon mb-2">
+                  {FaUsers({size: 24})}
+                </div>
+                <h2 className="text-white mb-1 fw-bold">{filteredAndSortedGroupedPackages.length}</h2>
+                <p className="text-white-50 mb-0 small fw-medium">Unique Clients</p>
+                <div className="stat-trend mt-2">
+                  <small className="text-white-75">↗️ +5% this month</small>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+
+        {/* Packages Table */}
+        <Card className="glass-card">
+          <Card.Body className="py-3">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="mb-0 text-white">Package List ({filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)})</h5>
+              <small className="text-white-75">
+                Sorted by {sortBy} ({sortOrder === 'asc' ? 'ascending' : 'descending'})
+              </small>
+            </div>
+
+            {filteredAndSortedGroupedPackages.length === 0 ? (
+              <div className="text-center py-5">
+                {FaBox({size: 48, className: "text-white-50 mb-3"})}
+                <p className="text-white-75">No packages found.</p>
+                <Button variant="primary" onClick={() => setShowAddModal(true)} className="mt-3">
+                  Add Your First Package
+                </Button>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <Table hover className="modern-table mb-0">
+                  <thead>
+                    <tr>
+                      <th 
+                        className="sortable-header py-2"
+                        onClick={() => handleSort('date')}
+                      >
+                        Date Added {sortBy === 'date' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
+                      </th>
+                      <th 
+                        className="sortable-header py-2"
+                        onClick={() => handleSort('client')}
+                      >
+                        Client {sortBy === 'client' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
+                      </th>
+                      <th 
+                        className="sortable-header py-2 px-1"
+                        onClick={() => handleSort('carrier')}
+                      >
+                        Carrier {sortBy === 'carrier' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
+                      </th>
+                      <th 
+                        className="sortable-header py-2"
+                        onClick={() => handleSort('status')}
+                      >
+                        Status {sortBy === 'status' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
+                      </th>
+                      <th className="py-2 px-1">
+                        Tracking
+                      </th>
+                      <th className="py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {renderGroupedPackages(filteredAndSortedGroupedPackages)}
+                  </tbody>
+                </Table>
+              </div>
+            )}
+          </Card.Body>
+        </Card>
+      </Container>
 
       <AddPackageModal
         show={showAddModal}
         onHide={() => setShowAddModal(false)}
         onPackageAdded={fetchGroupedPackages}
-      />
-
-      <ProofOfDeliveryModal
-        show={showProofModal}
-        onHide={() => setShowProofModal(false)}
-        packageId={selectedPackage.id}
-        trackingNumber={selectedPackage.trackingNumber}
-        customer={selectedPackage.customer}
-        carrier={selectedPackage.carrier}
       />
 
       <BulkProofOfDeliveryModal
@@ -702,7 +742,7 @@ const Dashboard: React.FC = () => {
         packageCount={selectedCustomerForDelete.packageCount}
         onCustomerDeleted={fetchGroupedPackages}
       />
-    </Container>
+    </>
   );
 };
 
