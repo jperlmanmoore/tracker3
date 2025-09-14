@@ -12,7 +12,7 @@ const fedexApi_1 = require("../utils/fedexApi");
 const uspsApi_1 = require("../utils/uspsApi");
 const User_1 = __importDefault(require("../models/User"));
 const router = express_1.default.Router();
-const sendPodEmailsIfConfigured = async (pkg, userId) => {
+const sendPodEmailsIfConfigured = async (pkg, userId, fedexResponse) => {
     try {
         if (pkg.spodEmailSent) {
             console.log(`SPOD email already sent for ${pkg.trackingNumber}`);
@@ -36,7 +36,8 @@ const sendPodEmailsIfConfigured = async (pkg, userId) => {
             customer: pkg.customer,
             carrier: pkg.carrier,
             deliveryDate: pkg.deliveryDate,
-            proofOfDelivery: pkg.proofOfDelivery
+            proofOfDelivery: pkg.proofOfDelivery,
+            fedexResponse: fedexResponse
         };
         const results = await (0, emailService_1.sendPodEmailsToMultipleRecipients)(emailsToSend, podEmailData);
         pkg.spodEmailSent = true;
@@ -188,7 +189,13 @@ router.post('/', auth_1.authenticateToken, async (req, res) => {
                     newPackage.trackingHistory = trackingHistory;
                     await newPackage.save();
                     if (updatedStatus === 'Delivered' && deliveryDate && !newPackage.spodEmailSent) {
-                        await sendPodEmailsIfConfigured(newPackage, userId);
+                        if (detectedCarrier === 'FedEx') {
+                            const deliveryStatus = await (0, fedexApi_1.checkFedExDeliveryStatus)(trackingNumber);
+                            await sendPodEmailsIfConfigured(newPackage, userId, deliveryStatus);
+                        }
+                        else {
+                            await sendPodEmailsIfConfigured(newPackage, userId);
+                        }
                     }
                 }
                 catch (refreshError) {
@@ -470,7 +477,13 @@ router.post('/:id/refresh', auth_1.authenticateToken, async (req, res) => {
         pkg.trackingHistory = trackingHistory;
         await pkg.save();
         if (updatedStatus === 'Delivered' && deliveryDate && pkg.deliveryDate && !pkg.spodEmailSent) {
-            await sendPodEmailsIfConfigured(pkg, userId);
+            if (pkg.carrier === 'FedEx') {
+                const deliveryStatus = await (0, fedexApi_1.checkFedExDeliveryStatus)(pkg.trackingNumber);
+                await sendPodEmailsIfConfigured(pkg, userId, deliveryStatus);
+            }
+            else {
+                await sendPodEmailsIfConfigured(pkg, userId);
+            }
         }
         res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.set('Pragma', 'no-cache');
@@ -827,7 +840,13 @@ router.post('/bulk-refresh', auth_1.authenticateToken, async (req, res) => {
                     await pkg.save();
                     updatedCount++;
                     if (updatedStatus === 'Delivered' && deliveryDate && !pkg.spodEmailSent) {
-                        await sendPodEmailsIfConfigured(pkg, userId);
+                        if (pkg.carrier === 'FedEx') {
+                            const deliveryStatus = await (0, fedexApi_1.checkFedExDeliveryStatus)(pkg.trackingNumber);
+                            await sendPodEmailsIfConfigured(pkg, userId, deliveryStatus);
+                        }
+                        else {
+                            await sendPodEmailsIfConfigured(pkg, userId);
+                        }
                     }
                 }
                 results.push({

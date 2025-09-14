@@ -5,6 +5,7 @@ interface PodEmailData {
     carrier: 'USPS' | 'FedEx';
     deliveryDate: Date;
     proofOfDelivery: ProofOfDelivery;
+    fedexResponse?: any;
 }
 export declare const sendPodEmail: (to: string, podData: PodEmailData) => Promise<boolean>;
 export declare const sendPodEmailsToMultipleRecipients: (emails: string[], podData: PodEmailData) => Promise<{

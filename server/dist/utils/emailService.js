@@ -23,7 +23,72 @@ const sendPodEmail = async (to, podData) => {
         const htmlContent = generatePodEmailHtml(podData);
         const attachments = [];
         const pod = podData.proofOfDelivery;
-        if (pod.spodPdfBase64) {
+        let spodInfo = '';
+        let ppodInfo = '';
+        if (podData.carrier === 'FedEx' && podData.fedexResponse) {
+            const fedexResponse = podData.fedexResponse;
+            try {
+                const output = fedexResponse.output;
+                if (output && output.completeTrackResults && output.completeTrackResults[0]) {
+                    const trackResult = output.completeTrackResults[0];
+                    if (trackResult.trackResults && trackResult.trackResults[0]) {
+                        const trackingResult = trackResult.trackResults[0];
+                        if (trackingResult.deliveryDetails) {
+                            const deliveryDetails = trackingResult.deliveryDetails;
+                            if (deliveryDetails.signedProofOfDelivery) {
+                                spodInfo = 'Available';
+                                if (deliveryDetails.signedProofOfDelivery.startsWith('http')) {
+                                    attachments.push({
+                                        filename: `SPOD_${podData.trackingNumber}.pdf`,
+                                        path: deliveryDetails.signedProofOfDelivery,
+                                        contentType: 'application/pdf'
+                                    });
+                                }
+                            }
+                            if (deliveryDetails.photoProofOfDelivery) {
+                                ppodInfo = 'Available';
+                                if (deliveryDetails.photoProofOfDelivery.startsWith('http')) {
+                                    attachments.push({
+                                        filename: `PPOD_${podData.trackingNumber}.jpg`,
+                                        path: deliveryDetails.photoProofOfDelivery,
+                                        contentType: 'image/jpeg'
+                                    });
+                                }
+                            }
+                        }
+                        if (trackingResult.scanEvents) {
+                            const deliveryEvent = trackingResult.scanEvents.find((event) => event.eventType === 'DL' || event.eventDescription?.toLowerCase().includes('delivered'));
+                            if (deliveryEvent && deliveryEvent.scanDetails) {
+                                if (deliveryEvent.scanDetails.signedProofOfDelivery && !spodInfo) {
+                                    spodInfo = 'Available';
+                                    if (deliveryEvent.scanDetails.signedProofOfDelivery.startsWith('http')) {
+                                        attachments.push({
+                                            filename: `SPOD_${podData.trackingNumber}.pdf`,
+                                            path: deliveryEvent.scanDetails.signedProofOfDelivery,
+                                            contentType: 'application/pdf'
+                                        });
+                                    }
+                                }
+                                if (deliveryEvent.scanDetails.photoProofOfDelivery && !ppodInfo) {
+                                    ppodInfo = 'Available';
+                                    if (deliveryEvent.scanDetails.photoProofOfDelivery.startsWith('http')) {
+                                        attachments.push({
+                                            filename: `PPOD_${podData.trackingNumber}.jpg`,
+                                            path: deliveryEvent.scanDetails.photoProofOfDelivery,
+                                            contentType: 'image/jpeg'
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (error) {
+                console.error('Error extracting SPOD/PPOD from FedEx response:', error);
+            }
+        }
+        if (pod.spodPdfBase64 && attachments.length === 0) {
             attachments.push({
                 filename: `SPOD_${podData.trackingNumber}.pdf`,
                 content: pod.spodPdfBase64,
@@ -31,21 +96,21 @@ const sendPodEmail = async (to, podData) => {
                 contentType: 'application/pdf'
             });
         }
-        else if (pod.spodPdfUrl) {
+        else if (pod.spodPdfUrl && attachments.length === 0) {
             attachments.push({
                 filename: `SPOD_${podData.trackingNumber}.pdf`,
                 path: pod.spodPdfUrl,
                 contentType: 'application/pdf'
             });
         }
-        if (pod.deliveryPhoto && pod.deliveryPhoto.startsWith('http')) {
+        if (pod.deliveryPhoto && pod.deliveryPhoto.startsWith('http') && attachments.length < 2) {
             attachments.push({
                 filename: `PPOD_${podData.trackingNumber}.jpg`,
                 path: pod.deliveryPhoto,
                 contentType: 'image/jpeg'
             });
         }
-        else if (pod.deliveryPhoto && !pod.deliveryPhoto.startsWith('http')) {
+        else if (pod.deliveryPhoto && !pod.deliveryPhoto.startsWith('http') && attachments.length < 2) {
             attachments.push({
                 filename: `PPOD_${podData.trackingNumber}.jpg`,
                 content: pod.deliveryPhoto,
@@ -91,6 +156,41 @@ const sendPodEmailsToMultipleRecipients = async (emails, podData) => {
 exports.sendPodEmailsToMultipleRecipients = sendPodEmailsToMultipleRecipients;
 const generatePodEmailHtml = (podData) => {
     const { trackingNumber, customer, carrier, deliveryDate, proofOfDelivery } = podData;
+    let spodStatus = 'Not available';
+    let ppodStatus = 'Not available';
+    if (podData.carrier === 'FedEx' && podData.fedexResponse) {
+        try {
+            const output = podData.fedexResponse.output;
+            if (output && output.completeTrackResults && output.completeTrackResults[0]) {
+                const trackResult = output.completeTrackResults[0];
+                if (trackResult.trackResults && trackResult.trackResults[0]) {
+                    const trackingResult = trackResult.trackResults[0];
+                    if (trackingResult.deliveryDetails) {
+                        if (trackingResult.deliveryDetails.signedProofOfDelivery) {
+                            spodStatus = 'Available';
+                        }
+                        if (trackingResult.deliveryDetails.photoProofOfDelivery) {
+                            ppodStatus = 'Available';
+                        }
+                    }
+                    if (trackingResult.scanEvents) {
+                        const deliveryEvent = trackingResult.scanEvents.find((event) => event.eventType === 'DL' || event.eventDescription?.toLowerCase().includes('delivered'));
+                        if (deliveryEvent && deliveryEvent.scanDetails) {
+                            if (deliveryEvent.scanDetails.signedProofOfDelivery && spodStatus === 'Not available') {
+                                spodStatus = 'Available';
+                            }
+                            if (deliveryEvent.scanDetails.photoProofOfDelivery && ppodStatus === 'Not available') {
+                                ppodStatus = 'Available';
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (error) {
+            console.error('Error checking SPOD/PPOD status:', error);
+        }
+    }
     return `
     <!DOCTYPE html>
     <html>
@@ -104,8 +204,12 @@ const generatePodEmailHtml = (podData) => {
         .content { background-color: #ffffff; padding: 20px; border: 1px solid #dee2e6; border-radius: 5px; }
         .tracking-info { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; }
         .signature-info { background-color: #d1ecf1; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .spod-ppod-info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #007bff; }
         .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; }
         .carrier-badge { display: inline-block; padding: 5px 10px; background-color: ${carrier === 'FedEx' ? '#0074D9' : '#0071BC'}; color: white; border-radius: 3px; font-weight: bold; }
+        .status-badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+        .status-available { background-color: #28a745; color: white; }
+        .status-unavailable { background-color: #6c757d; color: white; }
       </style>
     </head>
     <body>
@@ -139,6 +243,15 @@ const generatePodEmailHtml = (podData) => {
 
             ${proofOfDelivery.deliveryPhoto ? `<p><strong>Delivery Photo:</strong> <a href="${proofOfDelivery.deliveryPhoto}">View Photo</a></p>` : ''}
           </div>
+
+          ${carrier === 'FedEx' ? `
+          <div class="spod-ppod-info">
+            <h3>FedEx Proof of Delivery Documents</h3>
+            <p><strong>SPOD (Signed Proof of Delivery):</strong> <span class="status-badge ${spodStatus === 'Available' ? 'status-available' : 'status-unavailable'}">${spodStatus}</span></p>
+            <p><strong>PPOD (Photo Proof of Delivery):</strong> <span class="status-badge ${ppodStatus === 'Available' ? 'status-available' : 'status-unavailable'}">${ppodStatus}</span></p>
+            <p><em>Documents are attached to this email if available.</em></p>
+          </div>
+          ` : ''}
 
           ${proofOfDelivery.proofOfDeliveryUrl ?
         `<p><strong>View Full Proof of Delivery:</strong> <a href="${proofOfDelivery.proofOfDeliveryUrl}" target="_blank">Click Here</a></p>`
