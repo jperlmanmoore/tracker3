@@ -9,7 +9,7 @@ import EditPackageModal from './EditPackageModal';
 import DeleteCustomerModal from './DeleteCustomerModal';
 import UserSettings from './UserSettings';
 import axios from 'axios';
-import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaSearch, FaFilter, FaSortUp, FaSortDown, FaCog, FaBox, FaCheckCircle, FaTruck, FaUsers, FaSync } from 'react-icons/fa';
+import { FaPlus, FaSignOutAlt, FaTrash, FaEdit, FaEye, FaSearch, FaFilter, FaSortUp, FaSortDown, FaCog, FaBox, FaSync } from 'react-icons/fa';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -22,6 +22,7 @@ const Dashboard: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterClient, setFilterClient] = useState<string>('');
   const [filterCarrier, setFilterCarrier] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showBulkProofModal, setShowBulkProofModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
@@ -68,6 +69,13 @@ const Dashboard: React.FC = () => {
           );
         }
 
+        // Filter by status
+        if (filterStatus) {
+          pkgs = pkgs.filter(pkg =>
+            pkg.status && pkg.status.toLowerCase() === filterStatus.toLowerCase()
+          );
+        }
+
         // Sort packages
         pkgs = pkgs.slice().sort((a, b) => {
           let comparison = 0;
@@ -89,7 +97,7 @@ const Dashboard: React.FC = () => {
       })
       // Remove groups with no packages after filtering
       .filter(group => group.packages && group.packages.length > 0);
-  }, [packages, filterClient, filterCarrier, sortBy, sortOrder, globalSearch]);
+  }, [packages, filterClient, filterCarrier, filterStatus, sortBy, sortOrder, globalSearch]);
   const [selectedCustomerForDelete, setSelectedCustomerForDelete] = useState<{
     name: string;
     packageCount: number;
@@ -111,18 +119,6 @@ const Dashboard: React.FC = () => {
       return <tr><td colSpan={7}>No packages found</td></tr>;
     }
     return data.map((group: any) => {
-      // Group packages by carrier within each client
-      const packagesByCarrier = (group.packages || []).reduce((acc: any, pkg: any) => {
-        const carrier = pkg.carrier || 'Unknown';
-        if (!acc[carrier]) {
-          acc[carrier] = [];
-        }
-        acc[carrier].push(pkg);
-        return acc;
-      }, {});
-
-      const carriers = Object.keys(packagesByCarrier);
-
       return (
         <React.Fragment key={group._id}>
           <tr className="client-header-row">
@@ -156,52 +152,26 @@ const Dashboard: React.FC = () => {
                       </Button>
                     </OverlayTrigger>
                   )}
-                  {carriers.map(carrier => {
-                    const carrierPackages = packagesByCarrier[carrier];
-                    if (carrierPackages.length === 1) {
-                      return (
-                        <OverlayTrigger key={carrier} placement="top" overlay={<Tooltip>Track {carrier} Package</Tooltip>}>
-                          <Button 
-                            variant="outline-primary" 
-                            size="sm"
-                            className="d-flex align-items-center gap-1"
-                            onClick={() => openTrackingUrl(carrierPackages[0].trackingNumber, carrier)}
-                          >
-                            {FaSearch({size: 12})}
-                            Track {carrier}
-                          </Button>
-                        </OverlayTrigger>
-                      );
-                    } else {
-                      // Multiple packages for this carrier - create bulk tracking URL
-                      const trackingNumbers = carrierPackages.map((p: any) => p.trackingNumber);
-                      const bulkUrl = carrier.toLowerCase() === 'usps' 
-                        ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`
-                        : `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
-                      
-                      return (
-                        <OverlayTrigger key={carrier} placement="top" overlay={<Tooltip>Track All {carrier} Packages</Tooltip>}>
-                          <Button 
-                            variant="outline-primary" 
-                            size="sm"
-                            className="d-flex align-items-center gap-1"
-                            onClick={() => window.open(bulkUrl, '_blank')}
-                          >
-                            {FaSearch({size: 12})}
-                            Track All {carrier} ({carrierPackages.length})
-                          </Button>
-                        </OverlayTrigger>
-                      );
-                    }
-                  })}
+                  {/* Always show single "Track All" button */}
+                  <OverlayTrigger placement="top" overlay={<Tooltip>Track All Packages</Tooltip>}>
+                    <Button 
+                      variant="outline-primary" 
+                      size="sm"
+                      className="d-flex align-items-center gap-1"
+                      onClick={() => openBulkTrackingUrls(group.packages || [])}
+                    >
+                      {FaSearch({size: 12})}
+                      Track All
+                    </Button>
+                  </OverlayTrigger>
                 </div>
               </div>
             </td>
           </tr>
           {group.packages?.map((pkg: any, index: number) => (
             <tr key={index}>
-              <td className="py-2">{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
               <td className="py-2">{group._id}</td>
+              <td className="py-2">{new Date(pkg.dateSent || pkg.createdAt || Date.now()).toLocaleDateString()}</td>
               <td className="py-2 px-1">
                 <Badge bg={getCarrierBadgeVariant(pkg.carrier || '')}>
                   {pkg.carrier}
@@ -341,6 +311,32 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const openBulkTrackingUrls = (packages: any[]): void => {
+    // Group packages by carrier
+    const packagesByCarrier: { [key: string]: any[] } = {};
+    
+    packages.forEach(pkg => {
+      const carrier = pkg.carrier?.toLowerCase() || 'unknown';
+      if (!packagesByCarrier[carrier]) {
+        packagesByCarrier[carrier] = [];
+      }
+      packagesByCarrier[carrier].push(pkg);
+    });
+
+    // Open tracking URLs for each carrier
+    Object.entries(packagesByCarrier).forEach(([carrier, carrierPackages]) => {
+      const trackingNumbers = carrierPackages.map((pkg: any) => pkg.trackingNumber);
+      
+      if (carrier === 'usps') {
+        const url = `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumbers.join(',')}`;
+        window.open(url, '_blank');
+      } else if (carrier === 'fedex') {
+        const url = `https://www.fedex.com/fedextrack/?trknbr=${trackingNumbers.join(',')}`;
+        window.open(url, '_blank');
+      }
+    });
+  };
+
   const openBulkProofOfDelivery = (customer: string, packages: any[]): void => {
     setSelectedCustomer({
       name: customer,
@@ -468,18 +464,61 @@ const Dashboard: React.FC = () => {
     <UserSettings onBack={() => setShowUserSettings(false)} />
   ) : (
     <>
+      {/* Top Right Action Buttons */}
+      <div className="top-right-actions">
+        <div className="d-flex gap-2">
+          <OverlayTrigger placement="bottom" overlay={<Tooltip>Refresh All Package Statuses</Tooltip>}>
+            <Button 
+              variant="outline-light" 
+              className="glass-button d-flex align-items-center gap-2"
+              onClick={refreshAllPackages}
+              disabled={loading}
+            >
+              {FaSync({size: 14})}
+              Refresh All
+            </Button>
+          </OverlayTrigger>
+          <OverlayTrigger placement="bottom" overlay={<Tooltip>User Settings</Tooltip>}>
+            <Button 
+              variant="outline-light" 
+              className="glass-button d-flex align-items-center gap-2"
+              onClick={() => setShowUserSettings(true)}
+            >
+              {FaCog({size: 14})}
+              Settings
+            </Button>
+          </OverlayTrigger>
+          <OverlayTrigger placement="bottom" overlay={<Tooltip>Add New Package</Tooltip>}>
+            <Button 
+              variant="outline-light" 
+              className="glass-button d-flex align-items-center gap-2"
+              onClick={() => setShowAddModal(true)}
+            >
+              {FaPlus({size: 14})}
+              Add Package
+            </Button>
+          </OverlayTrigger>
+          <OverlayTrigger placement="bottom" overlay={<Tooltip>Logout</Tooltip>}>
+            <Button variant="outline-light" className="glass-button d-flex align-items-center gap-2" onClick={logout}>
+              {FaSignOutAlt({size: 14})}
+              Logout
+            </Button>
+          </OverlayTrigger>
+        </div>
+      </div>
+
       <Container fluid className="py-4 fade-in">
         {/* Modern Header */}
         <div className="modern-header">
           <div className="header-content">
             <div className="header-text">
               <h1 className="display-4 fw-bold mb-1">📦 Package Dashboard</h1>
-              <p className="text-black lead mb-0">
+              <p className="text-black lead mb-3">
                 Welcome back, {user?.firstName || user?.username}!
               </p>
             </div>
             <div className="header-actions">
-              <div className="search-container me-3">
+              <div className="search-container">
                 <Form.Control
                   type="text"
                   placeholder="Search packages..."
@@ -489,45 +528,6 @@ const Dashboard: React.FC = () => {
                 />
                 {FaSearch({className: "search-icon"})}
               </div>
-              <div className="d-flex gap-2">
-                <OverlayTrigger placement="bottom" overlay={<Tooltip>Refresh All Package Statuses</Tooltip>}>
-                  <Button 
-                    variant="outline-light" 
-                    className="glass-button d-flex align-items-center gap-2"
-                    onClick={refreshAllPackages}
-                    disabled={loading}
-                  >
-                    {FaSync({size: 14})}
-                    Refresh All
-                  </Button>
-                </OverlayTrigger>
-                <OverlayTrigger placement="bottom" overlay={<Tooltip>User Settings</Tooltip>}>
-                  <Button 
-                    variant="outline-light" 
-                    className="glass-button d-flex align-items-center gap-2"
-                    onClick={() => setShowUserSettings(true)}
-                  >
-                    {FaCog({size: 14})}
-                    Settings
-                  </Button>
-                </OverlayTrigger>
-                <OverlayTrigger placement="bottom" overlay={<Tooltip>Add New Package</Tooltip>}>
-                  <Button 
-                    variant="outline-light" 
-                    className="glass-button d-flex align-items-center gap-2"
-                    onClick={() => setShowAddModal(true)}
-                  >
-                    {FaPlus({size: 14})}
-                    Add Package
-                  </Button>
-                </OverlayTrigger>
-                <OverlayTrigger placement="bottom" overlay={<Tooltip>Logout</Tooltip>}>
-                  <Button variant="outline-light" className="glass-button d-flex align-items-center gap-2" onClick={logout}>
-                    {FaSignOutAlt({size: 14})}
-                    Logout
-                  </Button>
-                </OverlayTrigger>
-              </div>
             </div>
           </div>
         </div>
@@ -536,10 +536,10 @@ const Dashboard: React.FC = () => {
         {success && <Alert variant="success" dismissible onClose={() => setSuccess('')} className="mb-3">{success}</Alert>}
 
         {/* Filters */}
-        <Card className="glass-card mb-3">
+        <Card className="glass-card mb-4">
           <Card.Body className="py-3">
             <Row>
-              <Col md={4}>
+              <Col md={3}>
                 <Form.Group>
                   <Form.Label>Filter by Client</Form.Label>
                   <Form.Control
@@ -550,7 +550,7 @@ const Dashboard: React.FC = () => {
                   />
                 </Form.Group>
               </Col>
-              <Col md={4}>
+              <Col md={3}>
                 <Form.Group>
                   <Form.Label htmlFor="filter-select">Filter by Carrier</Form.Label>
                   <Form.Select
@@ -566,7 +566,25 @@ const Dashboard: React.FC = () => {
                   </Form.Select>
                 </Form.Group>
               </Col>
-              <Col md={4} className="d-flex align-items-end">
+              <Col md={3}>
+                <Form.Group>
+                  <Form.Label htmlFor="status-filter-select">Filter by Status</Form.Label>
+                  <Form.Select
+                    id="status-filter-select"
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    aria-label="Filter by delivery status"
+                    title="Filter packages by delivery status"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="in transit">In Transit</option>
+                    <option value="out for delivery">Out for Delivery</option>
+                    <option value="pending">Pending</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={3} className="d-flex align-items-end">
                 <OverlayTrigger placement="top" overlay={<Tooltip>Clear All Filters</Tooltip>}>
                   <Button 
                     variant="outline-light" 
@@ -574,6 +592,7 @@ const Dashboard: React.FC = () => {
                     onClick={() => {
                       setFilterClient('');
                       setFilterCarrier('');
+                      setFilterStatus('');
                       setGlobalSearch('');
                     }}
                   >
@@ -586,7 +605,8 @@ const Dashboard: React.FC = () => {
           </Card.Body>
         </Card>
 
-        {/* Statistics */}
+        {/* Statistics - Commented out for now */}
+        {/*
         <Row className="mb-4">
           <Col md={3}>
             <Card className="glass-card text-center stat-card card-hover">
@@ -651,21 +671,22 @@ const Dashboard: React.FC = () => {
             </Card>
           </Col>
         </Row>
+        */}
 
         {/* Packages Table */}
         <Card className="glass-card">
           <Card.Body className="py-3">
             <div className="d-flex justify-content-between align-items-center mb-3">
-              <h5 className="mb-0 text-white">Package List ({filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)})</h5>
-              <small className="text-white-75">
+              <h5 className="mb-0 text-dark">Package List ({filteredAndSortedGroupedPackages.reduce((acc, group) => acc + group.packages.length, 0)})</h5>
+              <small className="text-muted">
                 Sorted by {sortBy} ({sortOrder === 'asc' ? 'ascending' : 'descending'})
               </small>
             </div>
 
             {filteredAndSortedGroupedPackages.length === 0 ? (
               <div className="text-center py-5">
-                {FaBox({size: 48, className: "text-white-50 mb-3"})}
-                <p className="text-white-75">No packages found.</p>
+                {FaBox({size: 48, className: "text-muted mb-3"})}
+                <p className="text-muted">No packages found.</p>
                 <Button variant="primary" onClick={() => setShowAddModal(true)} className="mt-3">
                   Add Your First Package
                 </Button>
@@ -677,15 +698,15 @@ const Dashboard: React.FC = () => {
                     <tr>
                       <th 
                         className="sortable-header py-2"
-                        onClick={() => handleSort('date')}
-                      >
-                        Date Added {sortBy === 'date' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
-                      </th>
-                      <th 
-                        className="sortable-header py-2"
                         onClick={() => handleSort('client')}
                       >
                         Client {sortBy === 'client' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
+                      </th>
+                      <th 
+                        className="sortable-header py-2"
+                        onClick={() => handleSort('date')}
+                      >
+                        Date Added {sortBy === 'date' && (sortOrder === 'asc' ? FaSortUp({}) : FaSortDown({}))}
                       </th>
                       <th 
                         className="sortable-header py-2 px-1"
